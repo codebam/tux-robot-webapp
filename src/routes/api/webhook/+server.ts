@@ -336,17 +336,29 @@ async function chargeStars(bot: TelegramExecutionContext, env: Environment, task
 }
 
 export const POST: RequestHandler = async ({ request, platform }) => {
-	if (!platform) return new Response('Platform not found', { status: 500 });
+	console.log('Webhook request received');
+	if (!platform) {
+		console.error('Platform not found');
+		return new Response('Platform not found', { status: 500 });
+	}
 	const env = platform.env as Environment;
 	const ctx = platform.context;
 
-	const token = env.SECRET_TELEGRAM_API_TOKEN.trim();
+	const token = env.SECRET_TELEGRAM_API_TOKEN?.trim();
+	if (!token) {
+		console.error('SECRET_TELEGRAM_API_TOKEN is missing');
+		return new Response('Token missing', { status: 500 });
+	}
+
+	console.log('Initializing bot with token:', token.slice(0, 5) + '...');
 	const tuxrobot = new TelegramBot(token);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
 
-	return await tuxrobot
-		.command('start', async (bot: TelegramExecutionContext) => {
-			await bot.reply(
+	try {
+		const result = await tuxrobot
+			.command('start', async (bot: TelegramExecutionContext) => {
+				console.log('Start command triggered');
+				await bot.reply(
 				'Welcome! Here are my commands:\n' +
 				'/balance - Check your current Star balance\n' +
 				'/load <amount> - Top up your balance with Telegram Stars\n' +
@@ -403,10 +415,17 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			}
 		})
 		.onMessage(async (bot: TelegramExecutionContext) => {
+			console.log('OnMessage triggered:', bot.update_type);
 			if (bot.update_type === 'message' && bot.userId) {
 				const history = await historyManager.getHistory(bot.userId, bot.update.message?.message_thread_id);
 				await chargeStars(bot, env, { type: 'message', prompt: bot.text, history }, historyManager, ctx);
 			}
 		})
 		.handle(request);
+		console.log('Request handled successfully');
+		return result;
+	} catch (e) {
+		console.error('Error handling webhook:', e);
+		return new Response('Error', { status: 500 });
+	}
 };
