@@ -612,24 +612,40 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						break;
 					}
 					case 'guest_message': {
-						let prompt = bot.update.guest_message?.text?.toString() ?? '';
-						if (bot.userId) {
-							const history = await historyManager.getHistory(bot.userId, bot.update.guest_message?.message_thread_id);
-							await chargeStars(bot, env, { type: 'message', prompt, history }, historyManager, ctx);
-						}
-						break;
+					        let prompt = bot.update.guest_message?.text?.toString() ?? '';
+					        if (bot.update.guest_message?.reply_to_message) {
+					                const reply = bot.update.guest_message.reply_to_message;
+					                const replyText = reply.text ?? reply.caption ?? '';
+					                if (replyText) {
+					                        prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
+					                }
+					        }
+					        const userId = bot.update.guest_message?.from.id;
+					        if (userId) {
+					                const threadId = bot.update.guest_message?.message_thread_id;
+					                const history = await historyManager.getHistory(userId, threadId);
+					                await chargeStars(bot, env, { type: 'message', prompt, history }, historyManager, ctx);
+					        }
+					        break;
 					}
 					case 'business_message': {
-						const photo = bot.update.business_message?.photo;
-						const fileId = photo ? photo[photo.length - 1]?.file_id ?? '' : '';
-						let prompt = bot.update.business_message?.text?.toString() ?? bot.update.business_message?.caption ?? '';
-						if (bot.userId && bot.userId !== 69148517) {
-							const history = await historyManager.getHistory(bot.userId);
-							await chargeStars(bot, env, { type: 'business_message', prompt, history, fileId, systemPrompt: SYSTEM_PROMPTS.SEAN }, historyManager, ctx);
-						}
-						break;
-					}
-				}
+					        await bot.sendTyping();
+					        const photo = bot.update.business_message?.photo;
+					        const fileId = photo ? photo[photo.length - 1]?.file_id ?? '' : '';
+					        let prompt = bot.update.business_message?.text?.toString() ?? bot.update.business_message?.caption ?? '';
+					        if (bot.update.business_message?.reply_to_message) {
+					                const reply = bot.update.business_message.reply_to_message;
+					                const replyText = reply.text ?? reply.caption ?? '';
+					                if (replyText) {
+					                        prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
+					                }
+					        }
+					        if (bot.userId && bot.userId !== 69148517) {
+					                const history = await historyManager.getHistory(bot.userId);
+					                await chargeStars(bot, env, { type: 'business_message', prompt, history, fileId, systemPrompt: SYSTEM_PROMPTS.SEAN }, historyManager, ctx);
+					        }
+					        break;
+					}				}
 				return new Response('ok');
 			})
 			.handle(dummyRequest);
