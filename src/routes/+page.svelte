@@ -163,8 +163,13 @@
 	}
 
 	function renderMarkdown(content: string) {
+		const renderer = new marked.Renderer();
+		renderer.link = ({ href, title, text }) => {
+			return `<a href="${href}" ${title ? `title="${title}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`;
+		};
+
 		try {
-			return marked.parse(content, { async: false }) as string;
+			return marked.parse(content, { renderer, async: false }) as string;
 		} catch (e) {
 			return content;
 		}
