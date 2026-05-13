@@ -279,10 +279,9 @@
 		flex-direction: column;
 		height: 100vh;
 		width: 100%;
-		max-width: 1400px;
-		margin: 0 auto;
+		margin: 0;
 		background: var(--main-bg);
-		box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+		box-shadow: none;
 	}
 
 	header {
