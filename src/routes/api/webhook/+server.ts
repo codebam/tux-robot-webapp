@@ -1,6 +1,5 @@
-import { json, type RequestHandler } from '@sveltejs/kit';
+import { type RequestHandler } from '@sveltejs/kit';
 import TelegramBot, { TelegramExecutionContext } from '@codebam/cf-workers-telegram-bot';
-import { tool } from '@cloudflare/ai-utils';
 import {
 	type Environment,
 	type AiResponse,
@@ -60,9 +59,11 @@ async function streamAiResponseGemma(
 		if (image) payload.image = image;
 	}
 
-	const response = await env.AI.run(model as any, payload, {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const response = (await env.AI.run(model as any, payload, {
 		gateway: { id: 'default' }
-	});
+	}));
+
 
 	const draft_id = Math.floor(Math.random() * 1000000) + 1;
 
@@ -109,11 +110,15 @@ async function streamAiResponseGemma(
 						if (Date.now() - lastUpdate > 1000) {
 							try {
 								await bot.streamReply(await markdownToHtml(fullResponse), draft_id, 'HTML');
-							} catch {}
+							} catch {
+								/* ignore */
+							}
 							lastUpdate = Date.now();
 						}
 					}
-				} catch (e) {}
+				} catch {
+					/* ignore */
+				}
 			}
 		}
 	}
@@ -123,7 +128,9 @@ async function streamAiResponseGemma(
 			setTimeout(resolve, Math.max(0, 1000 - (Date.now() - lastUpdate)))
 		);
 		await bot.streamReply(await markdownToHtml(fullResponse), draft_id, 'HTML');
-	} catch (e) {}
+	} catch {
+		/* ignore */
+	}
 
 	return fullResponse;
 }
@@ -227,6 +234,7 @@ async function processTask(
 			}
 			case 'gen_photo': {
 				const rawPhoto = await env.AI.run(
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					AI_MODELS.IMAGEN as any,
 					{ prompt: task.prompt },
 					{ gateway: { id: 'default' } }
@@ -270,6 +278,7 @@ async function processTask(
 				if (task.fileId) {
 					const fileResponse = await bot.getFile(task.fileId);
 					const audioBlob = await fileResponse.arrayBuffer();
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					const transcription = (await env.AI.run(AI_MODELS.WHISPER as any, {
 						audio: [...new Uint8Array(audioBlob)]
 					})) as { text: string };
@@ -290,6 +299,7 @@ async function processTask(
 
 						if (responseText) {
 							await bot.reply(await markdownToHtml(responseText), 'HTML');
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
 							const ttsResponse = await env.AI.run(AI_MODELS.TTS as any, { text: responseText });
 							let audioData: ArrayBuffer | Uint8Array | null = null;
 							if (ttsResponse instanceof ReadableStream) {
@@ -302,6 +312,7 @@ async function processTask(
 								const voiceFile = new File([audioData], 'voice.wav', { type: 'audio/wav' });
 								const id = crypto.randomUUID();
 								await env.R2.put(id, voiceFile);
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any
 								await (bot as any).replyVoice(
 									`https://r2.seanbehan.ca/${id}`,
 									await markdownToHtml(responseText),
@@ -348,6 +359,7 @@ async function processTask(
 								parameters: t.parameters
 							}
 						}))
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					})) as any;
 
 					let toolCalls = response.tool_calls || response.choices?.[0]?.message?.tool_calls;
@@ -482,7 +494,7 @@ async function chargeStars(
 
 	const modelPreference =
 		(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ?? 'gemma4';
-	let modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 	const amount = amountOverride ?? modelConfig.cost;
 	task.modelId = modelConfig.id;
 
@@ -729,7 +741,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					case 'photo': {
 						const photo = bot.update.message?.photo;
 						const fileId = photo ? (photo[photo.length - 1]?.file_id ?? '') : '';
-						let prompt = bot.update.message?.caption ?? 'Please describe this image';
+						const prompt = bot.update.message?.caption ?? 'Please describe this image';
 						if (bot.userId) {
 							const history = await historyManager.getHistory(
 								bot.userId,
@@ -747,6 +759,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						break;
 					}
 					case 'voice': {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const voice = (bot.update.message as any)?.voice;
 						const fileId = voice?.file_id ?? '';
 						if (bot.userId) {
@@ -784,6 +797,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							{ role: 'user', content: query }
 						];
 						try {
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
 							const rawResponse = await env.AI.run(AI_MODELS.LLAMA as any, {
 								messages,
 								max_completion_tokens: 100
@@ -795,8 +809,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 									await markdownToHtml(aiResponse.response),
 									'HTML'
 								);
-						} catch (e) {
-							console.error('Error in inline:', e);
+						} catch {
+							/* ignore */
 						}
 						break;
 					}

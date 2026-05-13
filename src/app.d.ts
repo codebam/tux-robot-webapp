@@ -16,40 +16,40 @@ declare global {
 			caches: CacheStorage & { default: Cache };
 		}
 	}
-}
 
-interface TelegramWebApp {
-	initData: string;
-	initDataUnsafe: {
-		user?: {
-			id: number;
-			first_name: string;
-			last_name?: string;
-			username?: string;
-			language_code?: string;
+	interface TelegramWebApp {
+		initData: string;
+		initDataUnsafe: {
+			user?: {
+				id: number;
+				first_name: string;
+				last_name?: string;
+				username?: string;
+				language_code?: string;
+			};
 		};
-	};
-	ready(): void;
-	expand(): void;
-	close(): void;
-	MainButton: {
-		text: string;
-		color: string;
-		textColor: string;
-		isVisible: boolean;
-		isActive: boolean;
-		show(): void;
-		hide(): void;
-		enable(): void;
-		disable(): void;
-		onClick(callback: () => void): void;
-	};
-}
+		ready(): void;
+		expand(): void;
+		close(): void;
+		MainButton: {
+			text: string;
+			color: string;
+			textColor: string;
+			isVisible: boolean;
+			isActive: boolean;
+			show(): void;
+			hide(): void;
+			enable(): void;
+			disable(): void;
+			onClick(callback: () => void): void;
+		};
+	}
 
-interface Window {
-	Telegram?: {
-		WebApp: TelegramWebApp;
-	};
+	interface Window {
+		Telegram?: {
+			WebApp: TelegramWebApp;
+		};
+	}
 }
 
 export {};

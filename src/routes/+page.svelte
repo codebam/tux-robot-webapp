@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount, tick, untrack } from 'svelte';
-	import { marked } from 'marked';
 	import type { PageData } from './$types';
 	import favicon from '$lib/assets/favicon.png';
 
@@ -28,6 +27,7 @@
 			untrack(() => {
 				if (messages.length === 0) {
 					const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					data.history.forEach((h: any) => {
 						const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
 						if (match) {
@@ -62,7 +62,7 @@
 					balance = resData.balance;
 					userId = resData.userId;
 				}
-			} catch (e) {
+			} catch {
 				error = 'Failed to fetch balance';
 			} finally {
 				loading = false;
@@ -146,7 +146,7 @@
 							botMessage.content += content;
 							messages = [...messages.slice(0, -1), { ...botMessage }];
 							await scrollToBottom();
-						} catch (e) {
+						} catch {
 							// Some chunks might be incomplete, ignore parse errors
 						}
 					}
@@ -161,8 +161,9 @@
 					balance = resData.balance;
 				}
 			}
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			error = (e as any).message;
 		} finally {
 			isStreaming = false;
 		}
@@ -181,19 +182,6 @@
 			tg.close();
 		} else {
 			window.open('https://t.me/TuxRobot', '_blank');
-		}
-	}
-
-	function renderMarkdown(content: string) {
-		const renderer = new marked.Renderer();
-		renderer.link = ({ href, title, text }) => {
-			return `<a href="${href}" ${title ? `title="${title}"` : ''} target="_blank" rel="noopener noreferrer">${text}</a>`;
-		};
-
-		try {
-			return marked.parse(content, { renderer, async: false }) as string;
-		} catch (e) {
-			return content;
 		}
 	}
 </script>
@@ -226,11 +214,11 @@
 					<p>Start a conversation by typing a message below.</p>
 				</div>
 			{/if}
-			{#each messages as message}
+			{#each messages as message, i (i)}
 				<div class="message {message.role}">
 					<div class="bubble">
 						{#if message.role === 'bot'}
-							{@html renderMarkdown(message.content)}
+							{message.content}
 						{:else}
 							{message.content}
 						{/if}

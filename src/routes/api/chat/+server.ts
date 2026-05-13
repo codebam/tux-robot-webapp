@@ -4,8 +4,7 @@ import {
 	HistoryManager,
 	getBalance,
 	AVAILABLE_MODELS,
-	SYSTEM_PROMPTS,
-	AI_MODELS
+	SYSTEM_PROMPTS
 } from '$lib/server/chatUtils';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
@@ -97,7 +96,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const balance = await getBalance(uId, env);
 	const modelPreference =
 		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? 'gemma4';
-	let modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 	const amount = modelConfig.cost;
 
 	if (balance < amount) {
@@ -118,9 +117,10 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	// If model supports tools, we handle tool calling loop
 	if (modelConfig.supportsTools) {
 		const tools = [fetchTool];
-		let currentMessages = [...messages];
+		const currentMessages = [...messages];
 
 		for (let i = 0; i < 5; i++) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const aiResponse = (await env.AI.run(modelConfig.id as any, {
 				messages: currentMessages,
 				tools: tools.map((t) => ({
@@ -131,6 +131,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 						parameters: t.parameters
 					}
 				}))
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			})) as any;
 
 			const toolCalls = aiResponse.tool_calls || aiResponse.choices?.[0]?.message?.tool_calls;
@@ -187,6 +188,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	}
 
 	// Default streaming path for non-tool models or if tools were skipped
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const aiResponse = await env.AI.run(modelConfig.id as any, {
 		messages,
 		stream: true
@@ -208,7 +210,6 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	(async () => {
 		let fullResponse = '';
 		const decoder = new TextDecoder();
-		const encoder = new TextEncoder();
 
 		try {
 			while (true) {
