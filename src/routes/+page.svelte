@@ -2,7 +2,7 @@
 	import { onMount, tick, untrack } from 'svelte';
 	import { marked } from 'marked';
 	import type { PageData } from './$types';
-	import favicon from '$lib/assets/favicon.svg';
+	import favicon from '$lib/assets/favicon.png';
 
 	let { data }: { data: PageData } = $props();
 
