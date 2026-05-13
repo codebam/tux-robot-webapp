@@ -1,9 +1,0 @@
-name = "tux-robot-webapp"
-compatibility_date = "2025-06-04"
-pages_build_output_dir = ".svelte-kit/cloudflare"
-
-[observability.logs]
-enabled = true
-
-[observability.traces]
-enabled = true
