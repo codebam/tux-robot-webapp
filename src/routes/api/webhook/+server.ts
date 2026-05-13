@@ -358,7 +358,24 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		const update = await request.json();
 		console.log('Incoming Telegram Update:', JSON.stringify(update));
 
+		// Create a dummy Request object that the library expects
+		const dummyRequest = new Request(`https://tux-robot.codebam.ca/${token}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(update)
+		});
+
 		const result = await tuxrobot
+			.on(':guest_message', async (bot: TelegramExecutionContext) => {
+				console.log('Guest message detected');
+				// Re-route to standard command/message logic
+				const prompt = bot.text;
+				const userId = bot.update.guest_message?.from.id;
+				if (userId) {
+					const history = await historyManager.getHistory(userId, bot.update.guest_message?.message_thread_id);
+					await chargeStars(bot, env, { type: 'message', prompt, history }, historyManager, ctx);
+				}
+			})
 			.command('start', async (bot: TelegramExecutionContext) => {
 				console.log('Start command triggered');
 				await bot.reply(
@@ -432,7 +449,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				await chargeStars(bot, env, { type: 'message', prompt: bot.text, history }, historyManager, ctx);
 			}
 		})
-		.handle(update);
+		.handle(dummyRequest);
 		console.log('Request handled successfully');
 		return result;
 	} catch (e) {
