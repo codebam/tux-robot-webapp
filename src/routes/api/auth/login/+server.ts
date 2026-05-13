@@ -33,13 +33,22 @@ export const GET: RequestHandler = async ({ url, platform, cookies }) => {
 	if (!platform) return json({ error: 'Platform not found' }, { status: 500 });
 	const env = platform.env;
 
-	const isValid = await verifyTelegramLogin(new URLSearchParams(url.search), env.SECRET_TELEGRAM_API_TOKEN);
+	const isValid = await verifyTelegramLogin(
+		new URLSearchParams(url.search),
+		env.SECRET_TELEGRAM_API_TOKEN
+	);
 
 	if (!isValid) return json({ error: 'Invalid login data' }, { status: 401 });
 
 	const userId = url.searchParams.get('id');
 	if (userId) {
-		cookies.set('userId', userId, { path: '/', httpOnly: true, secure: true, sameSite: 'strict', maxAge: 60 * 60 * 24 * 30 });
+		cookies.set('userId', userId, {
+			path: '/',
+			httpOnly: true,
+			secure: true,
+			sameSite: 'strict',
+			maxAge: 60 * 60 * 24 * 30
+		});
 	}
 
 	return new Response(null, {

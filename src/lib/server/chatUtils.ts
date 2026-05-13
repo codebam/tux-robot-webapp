@@ -32,15 +32,21 @@ export interface Task {
 }
 
 export class HistoryManager {
-	constructor(private kv: KVNamespace) { }
+	constructor(private kv: KVNamespace) {}
 
 	private getKey(userId: number, threadId?: number): string {
 		return threadId ? `history:${String(userId)}:${String(threadId)}` : `history:${String(userId)}`;
 	}
 
-	async getHistory(userId: number, threadId?: number): Promise<{ role: string; content: string }[]> {
+	async getHistory(
+		userId: number,
+		threadId?: number
+	): Promise<{ role: string; content: string }[]> {
 		if (!this.kv) return [];
-		const history = await this.kv.get<{ role: string; content: string }[]>(this.getKey(userId, threadId), 'json');
+		const history = await this.kv.get<{ role: string; content: string }[]>(
+			this.getKey(userId, threadId),
+			'json'
+		);
 		return history ?? [];
 	}
 
@@ -49,7 +55,9 @@ export class HistoryManager {
 		const history = await this.getHistory(userId, threadId);
 		history.push({ role: 'system', content: `[INST] ${prompt} [/INST] \n ${response}` });
 		const trimmedHistory = history.slice(-10);
-		await this.kv.put(this.getKey(userId, threadId), JSON.stringify(trimmedHistory), { expirationTtl: 86400 });
+		await this.kv.put(this.getKey(userId, threadId), JSON.stringify(trimmedHistory), {
+			expirationTtl: 86400
+		});
 	}
 
 	async clearHistory(userId: number, threadId?: number) {
@@ -71,7 +79,7 @@ export async function getBalance(userId: number, env: Environment): Promise<numb
 
 export const SYSTEM_PROMPTS = {
 	TUX_ROBOT: 'You are a friendly assistant named TuxRobot.',
-	SEAN: 'You are a friendly person named Sean. Sometimes just acknowledge messages with okay. You are working on coding a cool telegram bot.',
+	SEAN: 'You are a friendly person named Sean. Sometimes just acknowledge messages with okay. You are working on coding a cool telegram bot.'
 };
 
 export const AI_MODELS = {
@@ -81,18 +89,33 @@ export const AI_MODELS = {
 	STABLE_DIFFUSION: '@cf/stabilityai/stable-diffusion-xl-base-1.0',
 	GEMMA: '@cf/google/gemma-4-26b-a4b-it',
 	WHISPER: '@cf/openai/whisper',
-	TTS: '@cf/deepgram/aura-1',
+	TTS: '@cf/deepgram/aura-1'
 };
 
-export const AVAILABLE_MODELS: Record<string, { id: string, cost: number, supportsTools?: boolean }> = {
-	'gemma4': { id: '@cf/google/gemma-4-26b-a4b-it', cost: 10, supportsTools: true },
+export const AVAILABLE_MODELS: Record<
+	string,
+	{ id: string; cost: number; supportsTools?: boolean }
+> = {
+	gemma4: { id: '@cf/google/gemma-4-26b-a4b-it', cost: 10, supportsTools: true },
 	'google/gemini-3-flash': { id: 'google/gemini-3-flash', cost: 15, supportsTools: true },
-	'google/gemini-3.1-flash-lite': { id: 'google/gemini-3.1-flash-lite', cost: 10, supportsTools: true },
+	'google/gemini-3.1-flash-lite': {
+		id: 'google/gemini-3.1-flash-lite',
+		cost: 10,
+		supportsTools: true
+	},
 	'google/gemini-3.1-pro': { id: 'google/gemini-3.1-pro', cost: 80, supportsTools: true },
 	'kimi-k2.6': { id: '@cf/moonshotai/kimi-k2.6', cost: 40, supportsTools: true },
 	'glm-4.7-flash': { id: '@cf/zai-org/glm-4.7-flash', cost: 10, supportsTools: true },
-	'llama-3.3-70b': { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', cost: 40, supportsTools: true },
-	'deepseek-r1-32b': { id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', cost: 60, supportsTools: false },
+	'llama-3.3-70b': {
+		id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+		cost: 40,
+		supportsTools: true
+	},
+	'deepseek-r1-32b': {
+		id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
+		cost: 60,
+		supportsTools: false
+	},
 	'nemotron-3': { id: '@cf/nvidia/nemotron-3-120b-a12b', cost: 100, supportsTools: true }
 };
 

@@ -373,7 +373,9 @@
 		display: flex;
 		justify-content: center;
 		align-items: center;
-		transition: transform 0.2s, background-color 0.2s;
+		transition:
+			transform 0.2s,
+			background-color 0.2s;
 	}
 
 	.topup-btn:hover {
@@ -449,8 +451,14 @@
 	}
 
 	@keyframes fadeIn {
-		from { opacity: 0; transform: translateY(10px); }
-		to { opacity: 1; transform: translateY(0); }
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	.message.user {
@@ -537,12 +545,22 @@
 		animation: bounce 1.4s infinite ease-in-out both;
 	}
 
-	.dot:nth-child(1) { animation-delay: -0.32s; }
-	.dot:nth-child(2) { animation-delay: -0.16s; }
+	.dot:nth-child(1) {
+		animation-delay: -0.32s;
+	}
+	.dot:nth-child(2) {
+		animation-delay: -0.16s;
+	}
 
 	@keyframes bounce {
-		0%, 80%, 100% { transform: scale(0); }
-		40% { transform: scale(1.0); }
+		0%,
+		80%,
+		100% {
+			transform: scale(0);
+		}
+		40% {
+			transform: scale(1);
+		}
 	}
 
 	.input-area {
@@ -567,7 +585,9 @@
 		max-height: 200px;
 		font-family: inherit;
 		outline: none;
-		transition: border-color 0.2s, box-shadow 0.2s;
+		transition:
+			border-color 0.2s,
+			box-shadow 0.2s;
 		line-height: 1.5;
 	}
 
@@ -587,7 +607,10 @@
 		justify-content: center;
 		align-items: center;
 		cursor: pointer;
-		transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+		transition:
+			background-color 0.2s,
+			transform 0.2s,
+			box-shadow 0.2s;
 		flex-shrink: 0;
 	}
 
@@ -635,7 +658,9 @@
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.loader {

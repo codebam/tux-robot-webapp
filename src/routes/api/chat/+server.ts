@@ -23,7 +23,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const fetchTool = {
 		name: 'fetch',
-		description: 'Perform an HTTP request to any API. Use this to get information from the internet.',
+		description:
+			'Perform an HTTP request to any API. Use this to get information from the internet.',
 		parameters: {
 			type: 'object',
 			properties: {
@@ -94,7 +95,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	}
 
 	const balance = await getBalance(uId, env);
-	const modelPreference = (await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? 'gemma4';
+	const modelPreference =
+		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? 'gemma4';
 	let modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 	const amount = modelConfig.cost;
 
@@ -215,7 +217,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 				const chunk = decoder.decode(value, { stream: true });
 				fullResponse += chunk; // This is raw stream, needs parsing if it's SSE-like but Workers AI raw stream is different
-				// Actually Workers AI returns raw text stream when using messages? 
+				// Actually Workers AI returns raw text stream when using messages?
 				// No, it returns SSE. Let's check.
 				await writer.write(value);
 			}
@@ -223,11 +225,12 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			// Capture the response from SSE chunks if necessary
 			// For now, let's assume it's raw for simplicity or fix it if it's SSE
 			// If it's SSE, we need to parse it to get the text for history
-			
+
 			// Simple parsing for history (this is a bit hacky, better to have a proper SSE parser)
-			const content = fullResponse.split('\n')
-				.filter(line => line.startsWith('data: '))
-				.map(line => {
+			const content = fullResponse
+				.split('\n')
+				.filter((line) => line.startsWith('data: '))
+				.map((line) => {
 					const dataStr = line.slice(6).trim();
 					if (dataStr === '[DONE]') return '';
 					try {
@@ -253,7 +256,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		headers: {
 			'Content-Type': 'text/event-stream',
 			'Cache-Control': 'no-cache',
-			'Connection': 'keep-alive'
+			Connection: 'keep-alive'
 		}
 	});
 };
