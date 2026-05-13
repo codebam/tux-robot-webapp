@@ -101,6 +101,28 @@
 				throw new Error(errorData.error || 'Failed to send message');
 			}
 
+			const contentType = response.headers.get('Content-Type');
+			if (contentType?.includes('application/json')) {
+				const data = await response.json();
+				if (data.type === 'command') {
+					messages = [...messages, { role: 'bot', content: data.message }];
+					if (currentPrompt.startsWith('/clear')) {
+						messages = [];
+					}
+					// Refresh balance
+					if (isTelegram && initData) {
+						const res = await fetch(`/api/balance?initData=${encodeURIComponent(initData)}`);
+						const resData = await res.json();
+						if (!resData.error) {
+							balance = resData.balance;
+						}
+					}
+					isStreaming = false;
+					scrollToBottom();
+					return;
+				}
+			}
+
 			const reader = response.body?.getReader();
 			if (!reader) throw new Error('No response body');
 
