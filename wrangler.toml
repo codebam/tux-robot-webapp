@@ -5,9 +5,6 @@ pages_build_output_dir = ".svelte-kit/cloudflare"
 [ai]
 binding = "AI"
 
-[observability.logs]
-enabled = true
-
 [[kv_namespaces]]
 binding = "CONVERSATION_HISTORY"
 id = "7c147881ce7d42b8811bfbf8c38e3ee4"
