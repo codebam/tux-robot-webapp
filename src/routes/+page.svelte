@@ -2,6 +2,7 @@
 	import { onMount, tick, untrack } from 'svelte';
 	import type { PageData } from './$types';
 	import favicon from '$lib/assets/favicon.png';
+	import Markdown from '$lib/Markdown.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -218,7 +219,7 @@
 				<div class="message {message.role}">
 					<div class="bubble">
 						{#if message.role === 'bot'}
-							{message.content}
+							<Markdown content={message.content} />
 						{:else}
 							{message.content}
 						{/if}
