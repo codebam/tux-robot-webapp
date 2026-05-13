@@ -1,6 +1,50 @@
+:root {
+	--bg-color: #f0f2f5;
+	--text-color: #1c1e21;
+	--main-bg: #ffffff;
+	--header-bg: #ffffff;
+	--border-color: #edf2f7;
+	--chat-bg: #f7fafc;
+	--bot-bubble-bg: #ffffff;
+	--bot-bubble-text: #1a202c;
+	--user-bubble-bg: linear-gradient(135deg, #0088cc, #0072ad);
+	--user-bubble-text: #ffffff;
+	--input-bg: #ffffff;
+	--input-border: #e2e8f0;
+	--pill-bg: #f7fafc;
+	--pill-border: #e2e8f0;
+	--error-bg: #fff5f5;
+	--error-border: #feb2b2;
+	--error-text: #c53030;
+	--code-bg: #2d3748;
+	--code-text: #edf2f7;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg-color: #0f172a;
+		--text-color: #f1f5f9;
+		--main-bg: #1e293b;
+		--header-bg: #1e293b;
+		--border-color: #334155;
+		--chat-bg: #0f172a;
+		--bot-bubble-bg: #334155;
+		--bot-bubble-text: #f1f5f9;
+		--input-bg: #1e293b;
+		--input-border: #334155;
+		--pill-bg: #334155;
+		--pill-border: #475569;
+		--error-bg: #450a0a;
+		--error-border: #991b1b;
+		--error-text: #fecaca;
+		--code-bg: #000000;
+		--code-text: #e2e8f0;
+	}
+}
+
 body {
-	background-color: #f0f2f5;
-	color: #1c1e21;
+	background-color: var(--bg-color);
+	color: var(--text-color);
 	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 	margin: 0;
 	padding: 0;
