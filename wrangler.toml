@@ -1,4 +1,5 @@
 name = "tux-robot-webapp"
+compatibility_flags = [ "nodejs_compat" ]
 compatibility_date = "2025-06-04"
 pages_build_output_dir = ".svelte-kit/cloudflare"
 
