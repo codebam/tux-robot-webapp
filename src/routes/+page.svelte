@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { marked } from 'marked';
 	import type { PageData } from './$types';
 	import favicon from '$lib/assets/favicon.svg';
@@ -17,25 +17,31 @@
 	let prompt = $state('');
 	let isStreaming = $state(false);
 	let chatContainer = $state<HTMLElement | null>(null);
+	let historyLoaded = false;
 
 	$effect(() => {
 		balance = data.balance;
 		userId = data.userId;
 		loading = !data.userId;
 
-		if (data.history && messages.length === 0) {
-			const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
-			data.history.forEach((h: any) => {
-				const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
-				if (match) {
-					parsedMessages.push({ role: 'user', content: match[1].trim() });
-					parsedMessages.push({ role: 'bot', content: match[2].trim() });
-				} else {
-					parsedMessages.push({ role: 'bot', content: h.content.trim() });
+		if (data.history && !historyLoaded && userId) {
+			untrack(() => {
+				if (messages.length === 0) {
+					const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
+					data.history.forEach((h: any) => {
+						const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
+						if (match) {
+							parsedMessages.push({ role: 'user', content: match[1].trim() });
+							parsedMessages.push({ role: 'bot', content: match[2].trim() });
+						} else {
+							parsedMessages.push({ role: 'bot', content: h.content.trim() });
+						}
+					});
+					messages = parsedMessages;
+					scrollToBottom();
 				}
+				historyLoaded = true;
 			});
-			messages = parsedMessages;
-			scrollToBottom();
 		}
 	});
 
