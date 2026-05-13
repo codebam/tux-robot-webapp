@@ -355,24 +355,35 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
 
 	try {
+		const update = await request.json();
+		console.log('Incoming Telegram Update:', JSON.stringify(update));
+
 		const result = await tuxrobot
 			.command('start', async (bot: TelegramExecutionContext) => {
 				console.log('Start command triggered');
 				await bot.reply(
-				'Welcome! Here are my commands:\n' +
-				'/balance - Check your current Star balance\n' +
-				'/load <amount> - Top up your balance with Telegram Stars\n' +
-				'/code <prompt> - Generate code\n' +
-				'/photo <prompt> - Generate an image (100 Stars)\n' +
-				'Click the button below to open the Web App!',
-				{
-					reply_markup: {
-						inline_keyboard: [[{ text: 'Open Web App', web_app: { url: 'https://tux-robot.codebam.ca' } }]]
+					'Welcome! Here are my commands:\n' +
+					'/balance - Check your current Star balance\n' +
+					'/load <amount> - Top up your balance with Telegram Stars\n' +
+					'/code <prompt> - Generate code\n' +
+					'/photo <prompt> - Generate an image (100 Stars)\n' +
+					'Click the button below to open the Web App!',
+					{
+						reply_markup: {
+							inline_keyboard: [[{ text: 'Open Web App', web_app: { url: 'https://tux-robot.codebam.ca' } }]]
+						}
 					}
+				);
+			})
+			.command('clear', async (bot: TelegramExecutionContext) => {
+				console.log('Clear command triggered');
+				if (bot.userId) {
+					await historyManager.clearHistory(bot.userId, bot.update.message?.message_thread_id);
+					await bot.reply('History cleared');
 				}
-			);
-		})
-		.command('code', async (bot: TelegramExecutionContext) => {
+			})
+			.command('code', async (bot: TelegramExecutionContext) => {
+
 			const prompt = bot.args.slice(1).join(' ');
 			await chargeStars(bot, env, { type: 'code', prompt }, historyManager, ctx);
 		})
@@ -421,7 +432,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				await chargeStars(bot, env, { type: 'message', prompt: bot.text, history }, historyManager, ctx);
 			}
 		})
-		.handle(request);
+		.handle(update);
 		console.log('Request handled successfully');
 		return result;
 	} catch (e) {
