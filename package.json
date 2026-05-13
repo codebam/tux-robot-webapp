@@ -44,7 +44,7 @@
 	},
 	"dependencies": {
 		"@cloudflare/ai-utils": "^1.0.1",
-		"@codebam/cf-workers-telegram-bot": "file:..",
+		"@codebam/cf-workers-telegram-bot": "^11.6.0",
 		"marked": "^18.0.3"
 	}
 }
