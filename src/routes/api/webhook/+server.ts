@@ -251,6 +251,14 @@ async function processTask(bot: TelegramExecutionContext, env: Environment, task
 	await bot.sendTyping();
 	try {
 		switch (task.type) {
+			case 'code': {
+				const messages = [{ role: 'user', content: task.prompt }];
+				const response = await streamAiResponseGemma(bot, env, task.modelId ?? AI_MODELS.CODER, messages, 50000);
+				if (response) {
+					await bot.reply(await markdownToHtml(response), 'HTML');
+				}
+				break;
+			}
 			case 'message': {
 				const messages: { role: string; content: string }[] = [
 					{ role: 'system', content: task.systemPrompt ?? SYSTEM_PROMPTS.TUX_ROBOT },
@@ -264,7 +272,28 @@ async function processTask(bot: TelegramExecutionContext, env: Environment, task
 				}
 				break;
 			}
-			// ... other cases (simplified for now to keep file size manageable)
+			case 'gen_photo': {
+				const rawPhoto = await env.AI.run(AI_MODELS.IMAGEN as any, { prompt: task.prompt }, { gateway: { id: 'default' } });
+				const photo = rawPhoto as { result?: { image?: string }; image?: string };
+				let imgData: ArrayBuffer | Uint8Array | null = null;
+
+				if (photo.image ?? photo.result?.image) {
+					const data = photo.image ?? photo.result?.image ?? '';
+					const base64Data = data.includes(',') ? data.split(',')[1] : data;
+					const binaryString = atob(base64Data);
+					imgData = Uint8Array.from(binaryString, (m) => m.codePointAt(0) ?? 0);
+				} else if (photo instanceof ReadableStream || photo instanceof ArrayBuffer || (typeof Uint8Array !== 'undefined' && photo instanceof Uint8Array)) {
+					imgData = photo instanceof ReadableStream ? await new Response(photo).arrayBuffer() : photo;
+				}
+
+				if (imgData) {
+					const photoFile = new File([imgData], 'photo');
+					const id = crypto.randomUUID();
+					await env.R2.put(id, photoFile);
+					await bot.replyPhoto(`https://r2.seanbehan.ca/${id}`);
+				}
+				break;
+			}
 		}
 	} catch (e) {
 		await bot.reply(`Error: ${String(e)}`);
@@ -321,6 +350,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				'Welcome! Here are my commands:\n' +
 				'/balance - Check your current Star balance\n' +
 				'/load <amount> - Top up your balance with Telegram Stars\n' +
+				'/code <prompt> - Generate code\n' +
+				'/photo <prompt> - Generate an image (100 Stars)\n' +
 				'Click the button below to open the Web App!',
 				{
 					reply_markup: {
@@ -328,6 +359,14 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					}
 				}
 			);
+		})
+		.command('code', async (bot: TelegramExecutionContext) => {
+			const prompt = bot.args.slice(1).join(' ');
+			await chargeStars(bot, env, { type: 'code', prompt }, historyManager, ctx);
+		})
+		.command('photo', async (bot: TelegramExecutionContext) => {
+			const prompt = bot.args.slice(1).join(' ');
+			await chargeStars(bot, env, { type: 'gen_photo', prompt }, historyManager, ctx, 100);
 		})
 		.command('balance', async (bot: TelegramExecutionContext) => {
 			if (bot.userId) {

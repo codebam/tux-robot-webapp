@@ -4,11 +4,17 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let balance = $state<number | null>(data.balance);
-	let userId = $state<number | null>(data.userId);
+	let balance = $state<number | null>(null);
+	let userId = $state<number | null>(null);
 	let error = $state<string | null>(null);
-	let loading = $state(!data.userId);
+	let loading = $state(true);
 	let isTelegram = $state(false);
+
+	$effect(() => {
+		balance = data.balance;
+		userId = data.userId;
+		loading = !data.userId;
+	});
 
 	onMount(async () => {
 		const tg = window.Telegram?.WebApp;
