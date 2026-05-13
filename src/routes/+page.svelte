@@ -2,6 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { marked } from 'marked';
 	import type { PageData } from './$types';
+	import favicon from '$lib/assets/favicon.svg';
 
 	let { data }: { data: PageData } = $props();
 
@@ -242,7 +243,7 @@
 	{:else}
 		<div class="centered">
 			<div class="hero">
-				<img src="/favicon.svg" alt="TuxRobot Logo" width="80" height="80" />
+				<img src={favicon} alt="TuxRobot Logo" width="80" height="80" />
 				<h1>TuxRobot</h1>
 				<p>Your AI assistant on Telegram and Web</p>
 			</div>
@@ -267,18 +268,6 @@
 </main>
 
 <style>
-	:global(body) {
-		background-color: #f0f2f5;
-		color: #1c1e21;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-		margin: 0;
-		padding: 0;
-		height: 100vh;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-
 	main {
 		display: flex;
 		flex-direction: column;
