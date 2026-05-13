@@ -47,7 +47,7 @@
 		if (tg && isTelegram) {
 			tg.close();
 		} else {
-			window.open('https://t.me/TuxRobotBot', '_blank');
+			window.open('https://t.me/TuxRobot', '_blank');
 		}
 	}
 </script>
@@ -71,7 +71,7 @@
 			<script
 				async
 				src="https://telegram.org/js/telegram-widget.js?22"
-				data-telegram-login="TuxRobotBot"
+				data-telegram-login="TuxRobot"
 				data-size="large"
 				data-auth-url="/api/auth/login"
 				data-request-access="write"
