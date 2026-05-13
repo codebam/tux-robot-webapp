@@ -298,6 +298,35 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	const tuxrobot = new TelegramBot(token);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
 
+	const fetchTool = {
+		name: 'fetch',
+		description: 'Perform an HTTP request to any API. Use this to get information from the internet.',
+		parameters: {
+			type: 'object',
+			properties: {
+				url: { type: 'string', description: 'The URL to fetch' },
+				method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE'], default: 'GET' },
+				headers: { type: 'object', description: 'HTTP headers to include in the request' },
+				body: { type: 'string', description: 'The request body' }
+			},
+			required: ['url']
+		},
+		run: async ({
+			url,
+			method,
+			headers,
+			body
+		}: {
+			url: string;
+			method?: string;
+			headers?: Record<string, string>;
+			body?: string;
+		}) => {
+			const res = await fetch(url, { method: method || 'GET', headers, body });
+			return await res.text();
+		}
+	};
+
 	try {
 		const update = await request.json();
 		console.log('Incoming Update:', JSON.stringify(update));
@@ -324,7 +353,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					'/photo <prompt> - Generate an image (100 Stars)\n' +
 					'/model <name> - Switch AI model and see costs\n' +
 					'/code <prompt> - Generate code snippets\n' +
-					'<prompt> - Generate text\n' +
+					'/request <prompt> - Make arbitrary API requests (uses fetch tool)\n' +
+					'<prompt> - Generate text (may use tools if supported by model)\n' +
 					'Send a voice note - Transform your bot into a voice assistant (+20 Stars)\n' +
 					'/clear - Clear your conversation history\n\n' +
 					'New users start with 200 free credits!\n\n' +
@@ -335,6 +365,14 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						}
 					}
 				);
+			})
+			.command('request', async (bot: TelegramExecutionContext) => {
+				const prompt = bot.args.slice(1).join(' ');
+				if (!prompt) {
+					await bot.reply('Please provide a request. Example: /request what is the weather in San Francisco?');
+					return;
+				}
+				await chargeStars(bot, env, { type: 'tool_call', prompt, tools: [fetchTool] }, historyManager, ctx);
 			})
 			.command('balance', async (bot: TelegramExecutionContext) => {
 				if (bot.userId) {
@@ -421,7 +459,19 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						}
 						if (bot.userId) {
 							const history = await historyManager.getHistory(bot.userId, bot.update.message?.message_thread_id);
-							await chargeStars(bot, env, { type: 'message', prompt, history }, historyManager, ctx);
+							const modelPreference = await env.CONVERSATION_HISTORY.get<string>(`model:${String(bot.userId)}`) ?? 'gemma4';
+							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+							
+							const task: Task = { 
+								type: modelConfig.supportsTools ? 'tool_call' : 'message', 
+								prompt, 
+								history 
+							};
+							if (modelConfig.supportsTools) {
+								task.tools = [fetchTool];
+							}
+							
+							await chargeStars(bot, env, task, historyManager, ctx);
 						}
 						break;
 					}
