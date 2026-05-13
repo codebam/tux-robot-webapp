@@ -813,13 +813,21 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						if (userId) {
 							const threadId = bot.update.guest_message?.message_thread_id;
 							const history = await historyManager.getHistory(userId, threadId);
-							await chargeStars(
-								bot,
-								env,
-								{ type: 'message', prompt, history },
-								historyManager,
-								ctx
-							);
+
+							const modelPreference =
+								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ?? 'gemma4';
+							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+
+							const task: Task = {
+								type: modelConfig.supportsTools ? 'tool_call' : 'message',
+								prompt,
+								history
+							};
+							if (modelConfig.supportsTools) {
+								task.tools = [fetchTool];
+							}
+
+							await chargeStars(bot, env, task, historyManager, ctx);
 						}
 						break;
 					}
