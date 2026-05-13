@@ -11,12 +11,18 @@ export interface Environment {
 	CONVERSATION_HISTORY: KVNamespace;
 }
 
-// ... (rest of the helper functions from tux-robot/src/index.ts)
-// I'll copy the logic here, but adapted for SvelteKit
+type promiseFunc<T> = (resolve: (result: T) => void, reject: (e?: Error) => void) => Promise<T>;
 
-/**
- * Convert markdown to html that Telegram can parse
- */
+function wrapPromise<T>(func: promiseFunc<T>, time = 1000) {
+	return new Promise((resolve, reject) => {
+		setTimeout(() => {
+			func(resolve, reject).catch((e: unknown) => {
+				console.error('Error in wrapPromise:', e);
+			});
+		}, time);
+	});
+}
+
 async function markdownToHtml(s: string): Promise<string> {
 	marked.setOptions(marked.getDefaults());
 	const parsed = (await marked.parse(s)) as string | { toString(): string };
@@ -114,11 +120,13 @@ class HistoryManager {
 	}
 
 	async getHistory(userId: number, threadId?: number): Promise<{ role: string; content: string }[]> {
+		if (!this.kv) return [];
 		const history = await this.kv.get<{ role: string; content: string }[]>(this.getKey(userId, threadId), 'json');
 		return history ?? [];
 	}
 
 	async addMessage(userId: number, prompt: string, response: string, threadId?: number) {
+		if (!this.kv) return;
 		const history = await this.getHistory(userId, threadId);
 		history.push({ role: 'system', content: `[INST] ${prompt} [/INST] \n ${response}` });
 		const trimmedHistory = history.slice(-10);
@@ -126,6 +134,7 @@ class HistoryManager {
 	}
 
 	async clearHistory(userId: number, threadId?: number) {
+		if (!this.kv) return;
 		await this.kv.delete(this.getKey(userId, threadId));
 	}
 }
@@ -228,13 +237,14 @@ async function streamAiResponseGemma(
 
 const SYSTEM_PROMPTS = {
 	TUX_ROBOT: 'You are a friendly assistant named TuxRobot.',
-	SEAN: 'You are a friendly person named Sean.',
+	SEAN: 'You are a friendly person named Sean. Sometimes just acknowledge messages with okay. You are working on coding a cool telegram bot.',
 };
 
 const AI_MODELS = {
 	LLAMA: '@cf/meta/llama-3.2-11b-vision-instruct',
 	CODER: '@cf/google/gemma-4-26b-a4b-it',
 	IMAGEN: 'google/imagen-4',
+	STABLE_DIFFUSION: '@cf/stabilityai/stable-diffusion-xl-base-1.0',
 	GEMMA: '@cf/google/gemma-4-26b-a4b-it',
 	WHISPER: '@cf/openai/whisper',
 	TTS: '@cf/deepgram/aura-1',
@@ -243,8 +253,13 @@ const AI_MODELS = {
 const AVAILABLE_MODELS: Record<string, { id: string, cost: number, supportsTools?: boolean }> = {
 	'gemma4': { id: '@cf/google/gemma-4-26b-a4b-it', cost: 10, supportsTools: true },
 	'google/gemini-3-flash': { id: 'google/gemini-3-flash', cost: 15, supportsTools: true },
+	'google/gemini-3.1-flash-lite': { id: 'google/gemini-3.1-flash-lite', cost: 10, supportsTools: true },
 	'google/gemini-3.1-pro': { id: 'google/gemini-3.1-pro', cost: 80, supportsTools: true },
+	'kimi-k2.6': { id: '@cf/moonshotai/kimi-k2.6', cost: 40, supportsTools: true },
+	'glm-4.7-flash': { id: '@cf/zai-org/glm-4.7-flash', cost: 10, supportsTools: true },
 	'llama-3.3-70b': { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', cost: 40, supportsTools: true },
+	'deepseek-r1-32b': { id: '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b', cost: 60, supportsTools: false },
+	'nemotron-3': { id: '@cf/nvidia/nemotron-3-120b-a12b', cost: 100, supportsTools: true }
 };
 
 async function processTask(bot: TelegramExecutionContext, env: Environment, task: Task, historyManager: HistoryManager, ctx: ExecutionContext) {
@@ -272,12 +287,52 @@ async function processTask(bot: TelegramExecutionContext, env: Environment, task
 				}
 				break;
 			}
+			case 'business_message': {
+				const messages: { role: string; content: string }[] = [
+					{ role: 'system', content: task.systemPrompt ?? SYSTEM_PROMPTS.SEAN },
+					...(task.history as { role: string; content: string }[]),
+					{ role: 'user', content: task.prompt },
+				];
+				let image: number[] | undefined;
+				if (task.fileId) {
+					const fileResponse = await bot.getFile(task.fileId);
+					const blob = await fileResponse.arrayBuffer();
+					image = [...new Uint8Array(blob)];
+				}
+				const response = await streamAiResponseGemma(bot, env, task.modelId ?? AI_MODELS.LLAMA, messages, 50000, image);
+				if (response) {
+					await bot.reply(await markdownToHtml(response), 'HTML');
+					if (task.userId) await historyManager.addMessage(task.userId, task.prompt, response, task.threadId);
+				}
+				break;
+			}
+			case 'photo': {
+				const messages: { role: string; content: string }[] = [
+					{ role: 'system', content: SYSTEM_PROMPTS.TUX_ROBOT },
+					...(task.history ?? []),
+					{ role: 'user', content: task.prompt },
+				];
+				if (task.fileId) {
+					const fileResponse = await bot.getFile(task.fileId);
+					const blob = await fileResponse.arrayBuffer();
+					const image = [...new Uint8Array(blob)];
+					const response = await streamAiResponseGemma(bot, env, task.modelId ?? AI_MODELS.GEMMA, messages, 50000, image);
+					if (response) {
+						await bot.reply(await markdownToHtml(response), 'HTML');
+						if (task.userId) await historyManager.addMessage(task.userId, task.prompt, response, task.threadId);
+					}
+				}
+				break;
+			}
 			case 'gen_photo': {
 				const rawPhoto = await env.AI.run(AI_MODELS.IMAGEN as any, { prompt: task.prompt }, { gateway: { id: 'default' } });
 				const photo = rawPhoto as { result?: { image?: string }; image?: string };
+				let imgUrl: string | null = null;
 				let imgData: ArrayBuffer | Uint8Array | null = null;
 
-				if (photo.image ?? photo.result?.image) {
+				if (photo.result?.image?.startsWith('http')) {
+					imgUrl = photo.result.image;
+				} else if (photo.image ?? photo.result?.image) {
 					const data = photo.image ?? photo.result?.image ?? '';
 					const base64Data = data.includes(',') ? data.split(',')[1] : data;
 					const binaryString = atob(base64Data);
@@ -286,16 +341,60 @@ async function processTask(bot: TelegramExecutionContext, env: Environment, task
 					imgData = photo instanceof ReadableStream ? await new Response(photo).arrayBuffer() : photo;
 				}
 
-				if (imgData) {
+				if (imgUrl) {
+					await bot.replyPhoto(imgUrl);
+				} else if (imgData) {
 					const photoFile = new File([imgData], 'photo');
 					const id = crypto.randomUUID();
 					await env.R2.put(id, photoFile);
 					await bot.replyPhoto(`https://r2.seanbehan.ca/${id}`);
+					ctx.waitUntil(wrapPromise(async () => { await env.R2.delete(id); }, 500));
+				}
+				break;
+			}
+			case 'voice': {
+				if (task.fileId) {
+					const fileResponse = await bot.getFile(task.fileId);
+					const audioBlob = await fileResponse.arrayBuffer();
+					const transcription = (await env.AI.run(AI_MODELS.WHISPER as any, {
+						audio: [...new Uint8Array(audioBlob)],
+					})) as { text: string };
+
+					if (transcription.text) {
+						const messages: { role: string; content: string }[] = [
+							{ role: 'system', content: task.systemPrompt ?? SYSTEM_PROMPTS.TUX_ROBOT },
+							...(task.history ?? []),
+							{ role: 'user', content: transcription.text },
+						];
+						const responseText = await streamAiResponseGemma(bot, env, task.modelId ?? AI_MODELS.GEMMA, messages, 50000);
+
+						if (responseText) {
+							await bot.reply(await markdownToHtml(responseText), 'HTML');
+							const ttsResponse = await env.AI.run(AI_MODELS.TTS as any, { text: responseText });
+							let audioData: ArrayBuffer | Uint8Array | null = null;
+							if (ttsResponse instanceof ReadableStream) {
+								audioData = await new Response(ttsResponse).arrayBuffer();
+							} else if (ttsResponse instanceof ArrayBuffer || ttsResponse instanceof Uint8Array) {
+								audioData = ttsResponse;
+							}
+
+							if (audioData) {
+								const voiceFile = new File([audioData], 'voice.wav', { type: 'audio/wav' });
+								const id = crypto.randomUUID();
+								await env.R2.put(id, voiceFile);
+								await (bot as any).replyVoice(`https://r2.seanbehan.ca/${id}`, await markdownToHtml(responseText), { parse_mode: 'HTML' });
+								ctx.waitUntil(wrapPromise(async () => { await env.R2.delete(id); }, 10000));
+							}
+
+							if (task.userId) await historyManager.addMessage(task.userId, transcription.text, responseText, task.threadId);
+						}
+					}
 				}
 				break;
 			}
 		}
 	} catch (e) {
+		console.error('Error in processTask:', e);
 		await bot.reply(`Error: ${String(e)}`);
 	}
 }
@@ -329,68 +428,57 @@ async function chargeStars(bot: TelegramExecutionContext, env: Environment, task
 		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance - amount));
 		await processTask(bot, env, task, historyManager, ctx);
 	} else {
-		const taskId = crypto.randomUUID();
-		await env.CONVERSATION_HISTORY.put(`task:${taskId}`, JSON.stringify(task), { expirationTtl: 3600 });
-		await bot.sendStarsInvoice('AI Generation', 'Charge for AI message generation', taskId, amount);
+		if (bot.update_type === 'business_message' || bot.update_type === 'guest_message') {
+			await bot.reply('Insufficient balance. Please go to direct messages and use /load to top up your Stars.');
+		} else {
+			const taskId = crypto.randomUUID();
+			await env.CONVERSATION_HISTORY.put(`task:${taskId}`, JSON.stringify(task), { expirationTtl: 3600 });
+			await bot.sendStarsInvoice('AI Generation', 'Charge for AI message generation', taskId, amount);
+		}
 	}
 }
 
 export const POST: RequestHandler = async ({ request, platform }) => {
-	console.log('Webhook request received');
-	if (!platform) {
-		console.error('Platform not found');
-		return new Response('Platform not found', { status: 500 });
-	}
-	const env = platform.env as any;
-	console.log('Available Env Keys:', Object.keys(env));
+	if (!platform) return new Response('Platform not found', { status: 500 });
+	const env = platform.env as Environment;
 	const ctx = platform.context;
 
-	const token = (env.SECRET_TELEGRAM_API_TOKEN || (env as any).process?.env?.SECRET_TELEGRAM_API_TOKEN)?.trim();
-	if (!token) {
-		console.error('SECRET_TELEGRAM_API_TOKEN is missing');
-		return new Response('Token missing', { status: 500 });
-	}
+	const token = env.SECRET_TELEGRAM_API_TOKEN?.trim();
+	if (!token) return new Response('Token missing', { status: 500 });
 
-	console.log('Initializing bot with token:', token.slice(0, 5) + '...');
 	const tuxrobot = new TelegramBot(token);
-	
-	// Re-check bindings inside the handler to be safe
-	const kv = env.CONVERSATION_HISTORY;
-	if (!kv) {
-		console.error('CRITICAL: CONVERSATION_HISTORY is undefined in handler');
-	}
-	const historyManager = new HistoryManager(kv);
+	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
 
 	try {
 		const update = await request.json();
-		console.log('Incoming Telegram Update:', JSON.stringify(update));
+		console.log('Incoming Update:', JSON.stringify(update));
 
-		// Create a dummy Request object that the library expects
 		const dummyRequest = new Request(`https://tux-robot.codebam.ca/${token}`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify(update)
 		});
 
-		const result = await tuxrobot
-			.on(':guest_message', async (bot: TelegramExecutionContext) => {
-				console.log('Guest message detected');
-				// Re-route to standard command/message logic
-				const prompt = bot.text;
-				const userId = bot.update.guest_message?.from.id;
-				if (userId) {
-					const history = await historyManager.getHistory(userId, bot.update.guest_message?.message_thread_id);
-					await chargeStars(bot, env, { type: 'message', prompt, history }, historyManager, ctx);
-				}
+		return await tuxrobot
+			.on(':document', async (bot: TelegramExecutionContext) => {
+				const fileId: string = bot.update.message?.document?.file_id ?? '';
+				const fileResponse = await bot.getFile(fileId);
+				const id = crypto.randomUUID().slice(0, 5);
+				await env.R2.put(id, await fileResponse.arrayBuffer());
+				await bot.reply(`https://r2.seanbehan.ca/${id}`);
 			})
 			.command('start', async (bot: TelegramExecutionContext) => {
-				console.log('Start command triggered');
 				await bot.reply(
 					'Welcome! Here are my commands:\n' +
 					'/balance - Check your current Star balance\n' +
 					'/load <amount> - Top up your balance with Telegram Stars\n' +
-					'/code <prompt> - Generate code\n' +
 					'/photo <prompt> - Generate an image (100 Stars)\n' +
+					'/model <name> - Switch AI model and see costs\n' +
+					'/code <prompt> - Generate code snippets\n' +
+					'<prompt> - Generate text\n' +
+					'Send a voice note - Transform your bot into a voice assistant (+20 Stars)\n' +
+					'/clear - Clear your conversation history\n\n' +
+					'New users start with 200 free credits!\n\n' +
 					'Click the button below to open the Web App!',
 					{
 						reply_markup: {
@@ -399,66 +487,152 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					}
 				);
 			})
-			.command('clear', async (bot: TelegramExecutionContext) => {
-				console.log('Clear command triggered');
+			.command('balance', async (bot: TelegramExecutionContext) => {
 				if (bot.userId) {
-					await historyManager.clearHistory(bot.userId, bot.update.message?.message_thread_id);
+					const balance = await getBalance(bot.userId, env);
+					await bot.reply(`Your current balance is ${String(balance)} Stars.`);
+				}
+			})
+			.command('load', async (bot: TelegramExecutionContext) => {
+				const amount = parseInt(bot.args[1] ?? '0');
+				if (isNaN(amount) || amount <= 0 || amount > 1000) {
+					await bot.reply('Please specify an amount between 1 and 1000 Stars. Example: /load 100');
+				} else {
+					await bot.sendStarsInvoice('Stars Top-up', `Purchase ${String(amount)} Stars`, `load:${String(amount)}`, amount);
+				}
+			})
+			.command('clear', async (bot: TelegramExecutionContext) => {
+				if (bot.userId) {
+					const threadId = bot.update.message?.message_thread_id ?? bot.update.guest_message?.message_thread_id;
+					await historyManager.clearHistory(bot.userId, threadId);
 					await bot.reply('History cleared');
 				}
 			})
 			.command('code', async (bot: TelegramExecutionContext) => {
-
-			const prompt = bot.args.slice(1).join(' ');
-			await chargeStars(bot, env, { type: 'code', prompt }, historyManager, ctx);
-		})
-		.command('photo', async (bot: TelegramExecutionContext) => {
-			const prompt = bot.args.slice(1).join(' ');
-			await chargeStars(bot, env, { type: 'gen_photo', prompt }, historyManager, ctx, 100);
-		})
-		.command('balance', async (bot: TelegramExecutionContext) => {
-			if (bot.userId) {
-				const balance = await getBalance(bot.userId, env);
-				await bot.reply(`Your current balance is ${String(balance)} Stars.`);
-			}
-		})
-		.command('load', async (bot: TelegramExecutionContext) => {
-			const amount = parseInt(bot.args[1] ?? '0');
-			if (isNaN(amount) || amount <= 0 || amount > 1000) {
-				await bot.reply('Please specify an amount between 1 and 1000 Stars. Example: /load 100');
-			} else {
-				await bot.sendStarsInvoice('Stars Top-up', `Purchase ${String(amount)} Stars`, `load:${String(amount)}`, amount);
-			}
-		})
-		.on(':pre_checkout_query', async (bot: TelegramExecutionContext) => {
-			await bot.answerPreCheckoutQuery(true);
-		})
-		.on(':successful_payment', async (bot: TelegramExecutionContext) => {
-			const payment = bot.update.message?.successful_payment;
-			if (!payment) return;
-
-			const payload = payment.invoice_payload;
-			const userId = bot.userId;
-			if (!userId) return;
-
-			if (payload.startsWith('load:')) {
-				const amount = parseInt(payload.split(':')[1]);
-				const balanceKey = `balance:${String(userId)}`;
-				const balance = await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json') ?? 0;
-				await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance + amount));
-				await bot.reply(`Successfully loaded ${String(amount)} Stars! New balance: ${String(balance + amount)} Stars.`);
-				return;
-			}
-		})
-		.onMessage(async (bot: TelegramExecutionContext) => {
-			console.log('OnMessage triggered:', bot.update_type);
-			if (bot.update_type === 'message' && bot.userId) {
-				const history = await historyManager.getHistory(bot.userId, bot.update.message?.message_thread_id);
-				await chargeStars(bot, env, { type: 'message', prompt: bot.text, history }, historyManager, ctx);
-			}
-		})
-		.handle(dummyRequest);
-		console.log('Request handled successfully');
-		return result;
+				const prompt = bot.args.slice(1).join(' ');
+				await chargeStars(bot, env, { type: 'code', prompt }, historyManager, ctx);
+			})
+			.command('model', async (bot: TelegramExecutionContext) => {
+				if (bot.userId) {
+					const modelKey = `model:${String(bot.userId)}`;
+					const args = bot.args;
+					if (args.length > 1) {
+						const selectedModel = args[1].toLowerCase();
+						if (selectedModel in AVAILABLE_MODELS) {
+							await env.CONVERSATION_HISTORY.put(modelKey, selectedModel);
+							await bot.reply(`Model updated to <b>${selectedModel}</b>.`, 'HTML');
+						} else {
+							await bot.reply(`Invalid model. Available models:\n${Object.keys(AVAILABLE_MODELS).join('\n')}`);
+						}
+					} else {
+						const currentModel = (await env.CONVERSATION_HISTORY.get<string>(modelKey)) ?? 'gemma4';
+						await bot.reply(
+							`Current model: <b>${currentModel}</b>\n\n` +
+							`Available models:\n` +
+							Object.entries(AVAILABLE_MODELS).map(([name, cfg]) => `- <code>${name}</code> (${String(cfg.cost)} Stars)`).join('\n'),
+							'HTML'
+						);
+					}
+				}
+			})
+			.on(':pre_checkout_query', async (bot: TelegramExecutionContext) => {
+				await bot.answerPreCheckoutQuery(true);
+			})
+			.on(':successful_payment', async (bot: TelegramExecutionContext) => {
+				const payment = bot.update.message?.successful_payment;
+				if (!payment) return;
+				const payload = payment.invoice_payload;
+				const userId = bot.userId;
+				if (!userId) return;
+				if (payload.startsWith('load:')) {
+					const amount = parseInt(payload.split(':')[1]);
+					const balanceKey = `balance:${String(userId)}`;
+					const balance = (await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json')) ?? 0;
+					await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance + amount));
+					await bot.reply(`Successfully loaded ${String(amount)} Stars! New balance: ${String(balance + amount)} Stars.`);
+					return;
+				}
+				const taskId = payload;
+				const task = await env.CONVERSATION_HISTORY.get<Task>(`task:${taskId}`, 'json');
+				if (!task) {
+					await bot.reply('Error: Task not found');
+					return;
+				}
+				await processTask(bot, env, task, historyManager, ctx);
+				await env.CONVERSATION_HISTORY.delete(`task:${taskId}`);
+			})
+			.onMessage(async (bot: TelegramExecutionContext) => {
+				switch (bot.update_type) {
+					case 'message': {
+						let prompt = bot.text;
+						if (bot.update.message?.reply_to_message) {
+							const reply = bot.update.message.reply_to_message;
+							const replyText = reply.text ?? reply.caption ?? '';
+							if (replyText) prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
+						}
+						if (bot.userId) {
+							const history = await historyManager.getHistory(bot.userId, bot.update.message?.message_thread_id);
+							await chargeStars(bot, env, { type: 'message', prompt, history }, historyManager, ctx);
+						}
+						break;
+					}
+					case 'photo': {
+						const photo = bot.update.message?.photo;
+						const fileId = photo ? photo[photo.length - 1]?.file_id ?? '' : '';
+						let prompt = bot.update.message?.caption ?? 'Please describe this image';
+						if (bot.userId) {
+							const history = await historyManager.getHistory(bot.userId, bot.update.message?.message_thread_id);
+							await chargeStars(bot, env, { type: 'photo', prompt, history, fileId }, historyManager, ctx, 10);
+						}
+						break;
+					}
+					case 'voice': {
+						const voice = (bot.update.message as any)?.voice;
+						const fileId = voice?.file_id ?? '';
+						if (bot.userId) {
+							const history = await historyManager.getHistory(bot.userId, bot.update.message?.message_thread_id);
+							const modelPreference = (await env.CONVERSATION_HISTORY.get<string>(`model:${String(bot.userId)}`)) ?? 'gemma4';
+							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+							await chargeStars(bot, env, { type: 'voice', prompt: '', history, fileId }, historyManager, ctx, modelConfig.cost + 20);
+						}
+						break;
+					}
+					case 'inline': {
+						const query = bot.update.inline_query?.query.toString() ?? '';
+						if (!query.endsWith('.') && !query.endsWith('?')) {
+							await bot.replyInline("Please complete your sentence", "End your sentence with a period (.) or question mark (?) to get an AI response", 'HTML');
+							break;
+						}
+						const messages = [{ role: 'system', content: SYSTEM_PROMPTS.TUX_ROBOT }, { role: 'user', content: query }];
+						try {
+							const rawResponse = await env.AI.run(AI_MODELS.LLAMA as any, { messages, max_completion_tokens: 100 });
+							const aiResponse = rawResponse as AiResponse;
+							if (aiResponse.response) await bot.replyInline(aiResponse.response, await markdownToHtml(aiResponse.response), 'HTML');
+						} catch (e) { console.error('Error in inline:', e); }
+						break;
+					}
+					case 'guest_message': {
+						let prompt = bot.update.guest_message?.text?.toString() ?? '';
+						if (bot.userId) {
+							const history = await historyManager.getHistory(bot.userId, bot.update.guest_message?.message_thread_id);
+							await chargeStars(bot, env, { type: 'message', prompt, history }, historyManager, ctx);
+						}
+						break;
+					}
+					case 'business_message': {
+						const photo = bot.update.business_message?.photo;
+						const fileId = photo ? photo[photo.length - 1]?.file_id ?? '' : '';
+						let prompt = bot.update.business_message?.text?.toString() ?? bot.update.business_message?.caption ?? '';
+						if (bot.userId && bot.userId !== 69148517) {
+							const history = await historyManager.getHistory(bot.userId);
+							await chargeStars(bot, env, { type: 'business_message', prompt, history, fileId, systemPrompt: SYSTEM_PROMPTS.SEAN }, historyManager, ctx);
+						}
+						break;
+					}
+				}
+				return new Response('ok');
+			})
+			.handle(dummyRequest);
 	} catch (e) {
 		console.error('Error handling webhook:', e);
 		return new Response('Error', { status: 500 });
