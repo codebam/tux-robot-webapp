@@ -258,16 +258,6 @@ async function processTask(bot: TelegramExecutionContext, env: Environment, task
 	}
 }
 
-async function getBalance(userId: number, env: Environment): Promise<number> {
-	const balanceKey = `balance:${String(userId)}`;
-	const balance = await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json');
-	if (balance === null) {
-		const defaultBalance = 200;
-		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(defaultBalance));
-		return defaultBalance;
-	}
-	return balance;
-}
 
 async function chargeStars(bot: TelegramExecutionContext, env: Environment, task: Task, historyManager: HistoryManager, ctx: ExecutionContext, amountOverride?: number) {
 	const userId = bot.update.message?.from.id ?? bot.update.business_message?.from.id ?? bot.update.guest_message?.from.id;
@@ -487,29 +477,37 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					        }
 					        break;
 					}
-					case 'business_message': {
-					        await bot.sendTyping();
-					        const photo = bot.update.business_message?.photo;
-					        const fileId = photo ? photo[photo.length - 1]?.file_id ?? '' : '';
-					        let prompt = bot.update.business_message?.text?.toString() ?? bot.update.business_message?.caption ?? '';
-					        if (bot.update.business_message?.reply_to_message) {
-					                const reply = bot.update.business_message.reply_to_message;
-					                const replyText = reply.text ?? reply.caption ?? '';
-					                if (replyText) {
-					                        prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
-					                }
-					        }
-					        if (bot.userId && bot.userId !== 69148517) {
-					                const history = await historyManager.getHistory(bot.userId);
-					                await chargeStars(bot, env, { type: 'business_message', prompt, history, fileId, systemPrompt: SYSTEM_PROMPTS.SEAN }, historyManager, ctx);
-					        }
-					        break;
-					}				}
-				return new Response('ok');
-			})
-			.handle(dummyRequest);
-	} catch (e) {
-		console.error('Error handling webhook:', e);
-		return new Response('Error', { status: 500 });
-	}
+			case 'business_message': {
+				await bot.sendTyping();
+				const photo = bot.update.business_message?.photo;
+				const fileId = photo ? photo[photo.length - 1]?.file_id ?? '' : '';
+				let prompt =
+					bot.update.business_message?.text?.toString() ?? bot.update.business_message?.caption ?? '';
+				if (bot.update.business_message?.reply_to_message) {
+					const reply = bot.update.business_message.reply_to_message;
+					const replyText = reply.text ?? reply.caption ?? '';
+					if (replyText) {
+						prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
+					}
+				}
+				if (bot.userId && bot.userId !== 69148517) {
+					const history = await historyManager.getHistory(bot.userId);
+					await chargeStars(
+						bot,
+						env,
+						{ type: 'business_message', prompt, history, fileId, systemPrompt: SYSTEM_PROMPTS.SEAN },
+						historyManager,
+						ctx
+					);
+				}
+				break;
+			}
+		}
+		return new Response('ok');
+	})
+	.handle(dummyRequest);
+} catch (e) {
+	console.error('Error handling webhook:', e);
+	return new Response('Error', { status: 500 });
+}
 };
