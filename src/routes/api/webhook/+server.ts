@@ -341,10 +341,11 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		console.error('Platform not found');
 		return new Response('Platform not found', { status: 500 });
 	}
-	const env = platform.env as Environment;
+	const env = platform.env as any;
+	console.log('Available Env Keys:', Object.keys(env));
 	const ctx = platform.context;
 
-	const token = env.SECRET_TELEGRAM_API_TOKEN?.trim();
+	const token = (env.SECRET_TELEGRAM_API_TOKEN || (env as any).process?.env?.SECRET_TELEGRAM_API_TOKEN)?.trim();
 	if (!token) {
 		console.error('SECRET_TELEGRAM_API_TOKEN is missing');
 		return new Response('Token missing', { status: 500 });
@@ -352,7 +353,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 	console.log('Initializing bot with token:', token.slice(0, 5) + '...');
 	const tuxrobot = new TelegramBot(token);
-	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
+	
+	// Re-check bindings inside the handler to be safe
+	const kv = env.CONVERSATION_HISTORY;
+	if (!kv) {
+		console.error('CRITICAL: CONVERSATION_HISTORY is undefined in handler');
+	}
+	const historyManager = new HistoryManager(kv);
 
 	try {
 		const update = await request.json();
