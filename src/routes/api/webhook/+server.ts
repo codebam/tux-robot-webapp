@@ -439,20 +439,22 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						}
 						if (bot.userId && bot.userId !== 69148517) {
 							const history = await historyManager.getHistory(bot.userId);
+							const modelPreference =
+								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(bot.userId)}`)) ??
+								'gemma4';
+							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+							const task: Task = {
+								type: 'business_message',
+								prompt,
+								history,
+								fileId,
+								systemPrompt: SYSTEM_PROMPTS.SEAN
+							};
+							if (modelConfig.supportsTools) {
+								task.tools = [fetchTool];
+							}
 							ctx.waitUntil(
-								chargeStars(
-									bot,
-									env,
-									{
-										type: 'business_message',
-										prompt,
-										history,
-										fileId,
-										systemPrompt: SYSTEM_PROMPTS.SEAN
-									},
-									historyManager,
-									ctx
-								)
+								chargeStars(bot, env, task, historyManager, ctx)
 							);
 						}
 						return new Response('ok');
