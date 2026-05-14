@@ -86,8 +86,7 @@ export async function getBalance(userId: number, env: Environment): Promise<numb
 }
 
 export const SYSTEM_PROMPTS = {
-	TUX_ROBOT: 'You are a friendly assistant named TuxRobot.',
-	SEAN: 'You are a friendly person named Sean. Sometimes just acknowledge messages with okay. You are working on coding a cool telegram bot.'
+	TUX_ROBOT: 'You are a friendly assistant named TuxRobot. You have access to an HTTP fetch tool. If a user asks you to get data from an API, look up a profile, or visit a website, you MUST execute the fetch tool yourself to get the data. DO NOT write code (like Python, JavaScript, or curl) for the user to run. Just get the data and summarize it.',
 };
 
 export const AI_MODELS = {
