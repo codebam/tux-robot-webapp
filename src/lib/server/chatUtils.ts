@@ -127,7 +127,22 @@ export async function markdownToHtml(s: string): Promise<string> {
 	const parsed = (await marked.parse(s)) as string | { toString(): string };
 	const html = typeof parsed === 'string' ? parsed : parsed.toString();
 
-	const allowedTags = ['b', 'i', 'u', 's', 'code', 'pre', 'a', 'blockquote'];
+	const allowedTags = [
+		'b',
+		'strong',
+		'i',
+		'em',
+		'u',
+		'ins',
+		's',
+		'strike',
+		'del',
+		'code',
+		'pre',
+		'a',
+		'blockquote',
+		'span'
+	];
 	const tagStack: string[] = [];
 	let result = '';
 	let i = 0;
@@ -160,9 +175,22 @@ export async function markdownToHtml(s: string): Promise<string> {
 							result += `<${tagName}>`;
 						}
 					}
+					i += fullTag.length;
+					continue;
+				} else if (tagName === 'p') {
+					if (isClosing) result += '\n\n';
+					i += fullTag.length;
+					continue;
+				} else if (tagName === 'br') {
+					result += '\n';
+					i += fullTag.length;
+					continue;
+				} else if (tagName === 'li') {
+					if (!isClosing) result += '• ';
+					else result += '\n';
+					i += fullTag.length;
+					continue;
 				}
-				i += fullTag.length;
-				continue;
 			}
 		}
 
@@ -185,5 +213,5 @@ export async function markdownToHtml(s: string): Promise<string> {
 		if (top) result += `</${top}>`;
 	}
 
-	return result;
+	return result.trim();
 }
