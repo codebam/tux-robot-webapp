@@ -1,6 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 
-async function verifyTelegramWebAppData(initData: string, botToken: string): Promise<boolean> {
+export async function verifyTelegramWebAppData(initData: string, botToken: string): Promise<boolean> {
 	const params = new URLSearchParams(initData);
 	const hash = params.get('hash');
 	params.delete('hash');
@@ -57,5 +57,8 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 	const balanceKey = `balance:${String(userId)}`;
 	const balance = await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json');
 
-	return json({ balance: balance ?? 200, userId });
+	const historyManager = await import('../../../lib/server/chatUtils').then(m => new m.HistoryManager(env.CONVERSATION_HISTORY));
+	const history = await historyManager.getHistory(userId);
+
+	return json({ balance: balance ?? 200, userId, history });
 };

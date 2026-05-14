@@ -6,10 +6,10 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let balance = $state<number | null>(null);
-	let userId = $state<number | null>(null);
+	let balance = $state<number | null>(data.balance);
+	let userId = $state<number | null>(data.userId);
 	let error = $state<string | null>(null);
-	let loading = $state(true);
+	let loading = $state(!data.userId);
 	let isTelegram = $state(false);
 	let initData = $state('');
 
@@ -20,10 +20,6 @@
 	let historyLoaded = false;
 
 	$effect(() => {
-		balance = data.balance;
-		userId = data.userId;
-		loading = !data.userId;
-
 		if (data.history && !historyLoaded && userId) {
 			untrack(() => {
 				if (messages.length === 0) {
@@ -69,6 +65,27 @@
 				} else {
 					balance = resData.balance;
 					userId = resData.userId;
+					
+					if (resData.history && messages.length === 0) {
+						const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
+						resData.history.forEach((h: any) => {
+							if (h.role === 'user') {
+								parsedMessages.push({ role: 'user', content: h.content.trim() });
+							} else if (h.role === 'assistant' || h.role === 'bot') {
+								parsedMessages.push({ role: 'bot', content: h.content.trim() });
+							} else {
+								const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
+								if (match) {
+									parsedMessages.push({ role: 'user', content: match[1].trim() });
+									parsedMessages.push({ role: 'bot', content: match[2].trim() });
+								} else {
+									parsedMessages.push({ role: 'bot', content: h.content.trim() });
+								}
+							}
+						});
+						messages = parsedMessages;
+						scrollToBottom();
+					}
 				}
 			} catch {
 				error = 'Failed to fetch balance';
@@ -98,10 +115,15 @@
 		await scrollToBottom();
 
 		try {
+			const bodyPayload: any = { prompt: currentPrompt };
+			if (isTelegram && initData) {
+				bodyPayload.initData = initData;
+			}
+			
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ prompt: currentPrompt })
+				body: JSON.stringify(bodyPayload)
 			});
 
 			if (!response.ok) {

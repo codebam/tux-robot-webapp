@@ -12,10 +12,20 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return new Response('Platform not found', { status: 500 });
 	const env = platform.env as Environment;
 
-	const userId = cookies.get('userId');
+	const body = (await request.json()) as any;
+	
+	let userId = cookies.get('userId');
+	if (!userId && body.initData) {
+		const isValid = await import('../balance/+server').then(m => m.verifyTelegramWebAppData(body.initData, env.SECRET_TELEGRAM_API_TOKEN)).catch(() => false);
+		if (isValid) {
+			const params = new URLSearchParams(body.initData);
+			const user = JSON.parse(params.get('user') ?? '{}');
+			if (user.id) userId = String(user.id);
+		}
+	}
+
 	if (!userId) return json({ error: 'Unauthorized' }, { status: 401 });
 
-	const body = (await request.json()) as any;
 	const prompt = body.prompt;
 	if (!prompt) return json({ error: 'Prompt is required' }, { status: 400 });
 
