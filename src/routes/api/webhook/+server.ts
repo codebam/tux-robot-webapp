@@ -448,7 +448,9 @@ async function processTask(
 							}
 						}
 					} else {
-						const finalContent = response.response || response.choices?.[0]?.message?.content;
+						// Final streaming response after tools or if no tools were called
+						const finalContent = await streamAiResponseGemma(bot, env, modelId, messages, 50000);
+
 						if (finalContent) {
 							await bot.reply(await markdownToHtml(finalContent), 'HTML');
 							if (task.userId)
