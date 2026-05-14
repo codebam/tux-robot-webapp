@@ -26,6 +26,9 @@ async function chargeStars(
 	if (!userId) return;
 
 	task.userId = userId;
+	task.updateType = bot.update_type;
+	task.guestQueryId = bot.update.guest_message?.guest_query_id;
+	task.businessConnectionId = bot.update.business_message?.business_connection_id?.toString();
 	task.threadId =
 		bot.update.message?.message_thread_id ?? bot.update.guest_message?.message_thread_id;
 	const balanceKey = `balance:${String(userId)}`;
