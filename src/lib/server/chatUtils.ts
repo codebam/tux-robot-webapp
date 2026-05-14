@@ -56,8 +56,9 @@ export class HistoryManager {
 	async addMessage(userId: number, prompt: string, response: string, threadId?: number) {
 		if (!this.kv) return;
 		const history = await this.getHistory(userId, threadId);
-		history.push({ role: 'system', content: `[INST] ${prompt} [/INST] \n ${response}` });
-		const trimmedHistory = history.slice(-10);
+		history.push({ role: 'user', content: prompt });
+		history.push({ role: 'assistant', content: response });
+		const trimmedHistory = history.slice(-20);
 		await this.kv.put(this.getKey(userId, threadId), JSON.stringify(trimmedHistory), {
 			expirationTtl: 86400
 		});
@@ -99,6 +100,7 @@ export const AVAILABLE_MODELS: Record<
 	string,
 	{ id: string; cost: number; supportsTools?: boolean }
 > = {
+	hermes: { id: '@hf/nousresearch/hermes-2-pro-mistral-7b', cost: 5, supportsTools: true },
 	gemma4: { id: '@cf/google/gemma-4-26b-a4b-it', cost: 10, supportsTools: true },
 	'google/gemini-3-flash': { id: 'google/gemini-3-flash', cost: 15, supportsTools: true },
 	'google/gemini-3.1-flash-lite': {
