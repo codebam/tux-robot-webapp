@@ -32,6 +32,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const uId = parseInt(userId);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
+	const balance = await getBalance(uId, env);
+	const commonHeaders = { 'x-new-balance': String(balance) };
 
 	// Handle / commands
 	if (prompt.startsWith('/')) {
@@ -39,10 +41,12 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		switch (command.toLowerCase()) {
 			case '/clear':
 				await historyManager.clearHistory(uId);
-				return json({ message: 'History cleared', type: 'command' });
+				return json({ message: 'History cleared', type: 'command' }, { headers: commonHeaders });
 			case '/balance': {
-				const balance = await getBalance(uId, env);
-				return json({ message: `Your current balance is ${balance} Stars.`, type: 'command' });
+				return json(
+					{ message: `Your current balance is ${balance} Stars.`, type: 'command' },
+					{ headers: commonHeaders }
+				);
 			}
 			case '/model': {
 				const modelKey = `model:${userId}`;
@@ -50,35 +54,43 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 					const selectedModel = args[0].toLowerCase();
 					if (selectedModel in AVAILABLE_MODELS) {
 						await env.CONVERSATION_HISTORY.put(modelKey, selectedModel);
-						return json({ message: `Model updated to ${selectedModel}.`, type: 'command' });
+						return json(
+							{ message: `Model updated to ${selectedModel}.`, type: 'command' },
+							{ headers: commonHeaders }
+						);
 					} else {
-						return json({
-							message: `Invalid model. Available models:\n${Object.keys(AVAILABLE_MODELS).join('\n')}`,
-							type: 'command'
-						});
+						return json(
+							{
+								message: `Invalid model. Available models:\n${Object.keys(AVAILABLE_MODELS).join('\n')}`,
+								type: 'command'
+							},
+							{ headers: commonHeaders }
+						);
 					}
 				} else {
 					const currentModel = (await env.CONVERSATION_HISTORY.get<string>(modelKey)) ?? 'gemma4';
 					const modelList = Object.entries(AVAILABLE_MODELS)
 						.map(([name, cfg]) => `- ${name} (${cfg.cost} Stars)`)
 						.join('\n');
-					return json({
-						message: `Current model: ${currentModel}\n\nAvailable models:\n${modelList}`,
-						type: 'command'
-					});
+					return json(
+						{
+							message: `Current model: ${currentModel}\n\nAvailable models:\n${modelList}`,
+							type: 'command'
+						},
+						{ headers: commonHeaders }
+					);
 				}
 			}
 		}
 	}
 
-	const balance = await getBalance(uId, env);
 	const modelPreference =
 		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? 'gemma4';
 	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 	const amount = modelConfig.cost;
 
 	if (balance < amount) {
-		return json({ error: 'Insufficient balance' }, { status: 403 });
+		return json({ error: 'Insufficient balance' }, { status: 403, headers: commonHeaders });
 	}
 
 	const history = await historyManager.getHistory(uId);
@@ -93,7 +105,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	};
 
 	// Deduct balance
-	await env.CONVERSATION_HISTORY.put(`balance:${userId}`, JSON.stringify(balance - amount));
+	const newBalance = balance - amount;
+	await env.CONVERSATION_HISTORY.put(`balance:${userId}`, JSON.stringify(newBalance));
+	const updatedHeaders = { 'x-new-balance': String(newBalance) };
 
 	try {
 		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/', {
@@ -113,7 +127,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			if (content) {
 				await historyManager.addMessage(uId, prompt, content);
 			}
-			return json({ message: content });
+			return json({ message: content }, { headers: updatedHeaders });
 		}
 
 		// It's a stream
@@ -168,7 +182,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			headers: {
 				'Content-Type': 'text/event-stream',
 				'Cache-Control': 'no-cache',
-				Connection: 'keep-alive'
+				Connection: 'keep-alive',
+				...updatedHeaders
 			}
 		});
 	} catch (e) {

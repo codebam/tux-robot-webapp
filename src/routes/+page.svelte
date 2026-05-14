@@ -17,6 +17,7 @@
 	let prompt = $state('');
 	let isStreaming = $state(false);
 	let chatContainer = $state<HTMLElement | null>(null);
+	let textarea = $state<HTMLTextAreaElement | null>(null);
 	let historyLoaded = false;
 
 	$effect(() => {
@@ -126,6 +127,11 @@
 				body: JSON.stringify(bodyPayload)
 			});
 
+			const headerBalance = response.headers.get('x-new-balance');
+			if (headerBalance) {
+				balance = parseInt(headerBalance);
+			}
+
 			if (!response.ok) {
 				const errorData = (await response.json()) as any;
 				throw new Error(errorData.error || 'Failed to send message');
@@ -185,19 +191,13 @@
 				}
 			}
 
-			// Refresh balance after message
-			if (isTelegram && initData) {
-				const res = await fetch(`/api/balance?initData=${encodeURIComponent(initData)}`);
-				const resData = (await res.json()) as any;
-				if (!resData.error) {
-					balance = resData.balance;
-				}
-			}
 		} catch (e) {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			error = (e as any).message;
 		} finally {
 			isStreaming = false;
+			await tick();
+			textarea?.focus();
 		}
 	}
 
@@ -277,6 +277,7 @@
 
 		<div class="input-area">
 			<textarea
+				bind:this={textarea}
 				bind:value={prompt}
 				placeholder="Type a message..."
 				onkeydown={handleKeydown}
