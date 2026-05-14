@@ -45,6 +45,7 @@ async function chargeStars(
 
 	if (balance >= amount) {
 		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance - amount));
+		task.telegramToken = env.SECRET_TELEGRAM_API_TOKEN;
 		ctx.waitUntil(
 			env.AI_WORKFLOW.fetch('https://workflow.local/', {
 				method: 'POST',
@@ -261,6 +262,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					await bot.reply('Error: Task not found');
 					return;
 				}
+				task.telegramToken = env.SECRET_TELEGRAM_API_TOKEN;
 				ctx.waitUntil(
 					env.AI_WORKFLOW.fetch('https://workflow.local/', {
 						method: 'POST',

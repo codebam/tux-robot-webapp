@@ -29,6 +29,7 @@ export interface Task {
 	modelId?: string;
 	fileId?: string;
 	systemPrompt?: string;
+	telegramToken?: string;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	tools?: any[];
 }
