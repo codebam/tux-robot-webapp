@@ -27,6 +27,8 @@ export interface Task {
 	businessConnectionId?: string;
 	prompt: string;
 	userId?: number;
+	senderId?: number;
+	chatId?: string;
 	threadId?: number;
 	history?: { role: string; content: string }[];
 	modelId?: string;

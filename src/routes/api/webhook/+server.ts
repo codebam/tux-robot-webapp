@@ -19,13 +19,29 @@ async function chargeStars(
 	ctx: ExecutionContext,
 	amountOverride?: number
 ) {
-	const userId =
+	let userId =
 		bot.update.message?.from.id ??
 		bot.update.business_message?.from.id ??
 		bot.update.guest_message?.from.id;
+
+	if (
+		bot.update_type === 'business_message' &&
+		bot.update.business_message?.business_connection_id
+	) {
+		const ownerId = await env.CONVERSATION_HISTORY.get<number>(
+			`business_connection:${bot.update.business_message.business_connection_id}`,
+			'json'
+		);
+		if (ownerId) {
+			userId = ownerId;
+		}
+	}
+
 	if (!userId) return;
 
 	task.userId = userId;
+	task.senderId = bot.userId;
+	task.chatId = bot.chatId;
 	task.updateType = bot.update_type;
 	task.guestQueryId = bot.update.guest_message?.guest_query_id;
 	task.businessConnectionId = bot.update.business_message?.business_connection_id?.toString();
@@ -391,8 +407,41 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						}
 						return new Response('ok');
 					}
+					case 'business_connection': {
+						const connection = bot.update.business_connection;
+						if (connection) {
+							await env.CONVERSATION_HISTORY.put(
+								`business_connection:${connection.id}`,
+								JSON.stringify(connection.user.id)
+							);
+						}
+						return new Response('ok');
+					}
 					case 'guest_message': {
 						let prompt = bot.update.guest_message?.text?.toString() ?? '';
+						let botUsername = await env.CONVERSATION_HISTORY.get('bot_username');
+						if (!botUsername) {
+							const meRes = await bot.currentContext.api.getMe(bot.api.toString());
+							if (meRes.ok) {
+								const me = (await meRes.json()) as { ok: boolean; result: { username: string } };
+								if (me.ok && me.result.username) {
+									botUsername = me.result.username;
+									await env.CONVERSATION_HISTORY.put('bot_username', botUsername, {
+										expirationTtl: 86400
+									});
+								}
+							}
+						}
+						const isMentioned = bot.update.guest_message?.entities?.some(
+							(e) =>
+								e.type === 'mention' &&
+								prompt
+									.substring(e.offset, e.offset + e.length)
+									.toLowerCase() === `@${(botUsername || 'TuxRobot').toLowerCase()}`
+						);
+						if (!isMentioned) {
+							return new Response('ok');
+						}
 						if (bot.update.guest_message?.reply_to_message) {
 							const reply = bot.update.guest_message.reply_to_message;
 							const replyText = reply.text ?? reply.caption ?? '';
@@ -437,10 +486,20 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
 							}
 						}
-						if (bot.userId && bot.userId !== 69148517) {
-							const history = await historyManager.getHistory(bot.userId);
+						let userId = bot.userId;
+						if (bot.update.business_message?.business_connection_id) {
+							const ownerId = await env.CONVERSATION_HISTORY.get<number>(
+								`business_connection:${bot.update.business_message.business_connection_id}`,
+								'json'
+							);
+							if (ownerId) {
+								userId = ownerId;
+							}
+						}
+						if (userId && userId !== 69148517) {
+							const history = await historyManager.getHistory(userId);
 							const modelPreference =
-								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(bot.userId)}`)) ??
+								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ??
 								'gemma4';
 							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 							const task: Task = {
