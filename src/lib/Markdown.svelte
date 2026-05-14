@@ -6,7 +6,7 @@
 	let tokens = $derived(marked.lexer(content));
 </script>
 
-{#snippet renderToken(token)}
+{#snippet renderToken(token: any)}
 	{#if token.type === 'paragraph'}
 		<p>
 			{#each token.tokens || [] as subToken, i (i)}

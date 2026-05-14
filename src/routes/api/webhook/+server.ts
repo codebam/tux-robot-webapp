@@ -157,13 +157,15 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						'/clear - Clear your conversation history\n\n' +
 						'New users start with 200 free credits!\n\n' +
 						'Click the button below to open the Web App!',
+					'HTML',
+					false,
 					{
 						reply_markup: {
 							inline_keyboard: [
 								[{ text: 'Open Web App', web_app: { url: 'https://tux-robot.codebam.ca' } }]
 							]
 						}
-					}
+					} as any
 				);
 			})
 			.command('request', async (bot: TelegramExecutionContext) => {

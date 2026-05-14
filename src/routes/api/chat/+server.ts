@@ -6,6 +6,7 @@ import {
 	AVAILABLE_MODELS,
 	SYSTEM_PROMPTS
 } from '$lib/server/chatUtils';
+import { runWithTools } from '@cloudflare/ai-utils';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return new Response('Platform not found', { status: 500 });
@@ -14,7 +15,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const userId = cookies.get('userId');
 	if (!userId) return json({ error: 'Unauthorized' }, { status: 401 });
 
-	const { prompt } = await request.json();
+	const body = (await request.json()) as any;
+	const prompt = body.prompt;
 	if (!prompt) return json({ error: 'Prompt is required' }, { status: 400 });
 
 	const uId = parseInt(userId);
@@ -45,8 +47,16 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			headers?: Record<string, string>;
 			body?: string;
 		}) => {
-			const res = await fetch(url, { method: method || 'GET', headers, body });
-			return await res.text();
+			try {
+				const res = await fetch(url, {
+					method: method || 'GET',
+					headers: headers || {},
+					body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined
+				});
+				return await res.text();
+			} catch (e) {
+				return `Error executing fetch: ${String(e)}`;
+			}
 		}
 	};
 
@@ -85,11 +95,6 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 					});
 				}
 			}
-			case '/request': {
-				// We'll handle /request as a normal prompt but with tools enabled
-				// Fallthrough to normal processing
-				break;
-			}
 		}
 	}
 
@@ -114,150 +119,80 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	// Deduct balance
 	await env.CONVERSATION_HISTORY.put(`balance:${userId}`, JSON.stringify(balance - amount));
 
-	// If model supports tools, we handle tool calling loop
-	if (modelConfig.supportsTools) {
-		const tools = [fetchTool];
-		const currentMessages = [...messages];
-
-		for (let i = 0; i < 5; i++) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const aiResponse = (await env.AI.run(modelConfig.id as any, {
-				messages: currentMessages,
-				tools: tools.map((t) => ({
-					type: 'function',
-					function: {
-						name: t.name,
-						description: t.description,
-						parameters: t.parameters
-					}
-				}))
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			})) as any;
-
-			const toolCalls = aiResponse.tool_calls || aiResponse.choices?.[0]?.message?.tool_calls;
-
-			if (toolCalls && toolCalls.length > 0) {
-				currentMessages.push({
-					role: 'assistant',
-					content: aiResponse.choices?.[0]?.message?.content || null,
-					tool_calls: toolCalls
-				});
-
-				for (const toolCall of toolCalls) {
-					const name = toolCall.name || toolCall.function?.name;
-					let args = toolCall.arguments || toolCall.function?.arguments;
-					if (typeof args === 'string') {
-						try {
-							args = JSON.parse(args);
-						} catch {
-							// ignore
-						}
-					}
-
-					const toolDef = tools.find((t) => t.name === name);
-					if (toolDef) {
-						try {
-							const result = await toolDef.run(args);
-							currentMessages.push({
-								role: 'tool',
-								name: name,
-								tool_call_id: toolCall.id,
-								content: typeof result === 'string' ? result : JSON.stringify(result)
-							});
-						} catch (e) {
-							currentMessages.push({
-								role: 'tool',
-								name: name,
-								tool_call_id: toolCall.id,
-								content: `Error executing tool: ${String(e)}`
-							});
-						}
-					}
-				}
-			} else {
-				// No more tool calls, return final response (streamed if possible, but here we've already done non-streaming calls)
-				// To provide a consistent experience, we'll return a non-streaming response for tool-enabled models
-				// or we could do one last streaming call. Let's do a non-streaming response for simplicity now.
-				const content = aiResponse.response || aiResponse.choices?.[0]?.message?.content || '';
-				if (content) {
-					await historyManager.addMessage(uId, prompt, content);
-				}
-				return json({ message: content, type: 'command' });
+	try {
+		const aiResponse = await runWithTools(
+			env.AI as any,
+			modelConfig.id as any,
+			{
+				messages: messages as any,
+				tools: modelConfig.supportsTools ? [fetchTool] : []
+			},
+			{
+				streamFinalResponse: true
 			}
-		}
-	}
+		);
 
-	// Default streaming path for non-tool models or if tools were skipped
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const aiResponse = await env.AI.run(modelConfig.id as any, {
-		messages,
-		stream: true
-	});
-
-	if (!(aiResponse instanceof ReadableStream)) {
-		return new Response('AI error: Expected stream', { status: 500 });
-	}
-
-	const historyId = uId;
-	const historyPrompt = prompt;
-
-	// Use a TransformStream to capture the full response for history
-	const { readable, writable } = new TransformStream();
-	const writer = writable.getWriter();
-	const reader = aiResponse.getReader();
-
-	// background task to pipe and capture
-	(async () => {
-		let fullResponse = '';
-		const decoder = new TextDecoder();
-
-		try {
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-
-				const chunk = decoder.decode(value, { stream: true });
-				fullResponse += chunk; // This is raw stream, needs parsing if it's SSE-like but Workers AI raw stream is different
-				// Actually Workers AI returns raw text stream when using messages?
-				// No, it returns SSE. Let's check.
-				await writer.write(value);
-			}
-
-			// Capture the response from SSE chunks if necessary
-			// For now, let's assume it's raw for simplicity or fix it if it's SSE
-			// If it's SSE, we need to parse it to get the text for history
-
-			// Simple parsing for history (this is a bit hacky, better to have a proper SSE parser)
-			const content = fullResponse
-				.split('\n')
-				.filter((line) => line.startsWith('data: '))
-				.map((line) => {
-					const dataStr = line.slice(6).trim();
-					if (dataStr === '[DONE]') return '';
-					try {
-						const data = JSON.parse(dataStr);
-						return data.response ?? data.choices?.[0]?.delta?.content ?? '';
-					} catch {
-						return '';
-					}
-				})
-				.join('');
-
+		if (!(aiResponse instanceof ReadableStream)) {
+			const content = (aiResponse as any).response || (aiResponse as any).choices?.[0]?.message?.content || '';
 			if (content) {
-				await historyManager.addMessage(historyId, historyPrompt, content);
+				await historyManager.addMessage(uId, prompt, content);
 			}
-		} catch (e) {
-			console.error('Error in stream processing:', e);
-		} finally {
-			await writer.close();
+			return json({ message: content });
 		}
-	})();
 
-	return new Response(readable, {
-		headers: {
-			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
-			Connection: 'keep-alive'
+		// Use a TransformStream to capture the full response for history
+		const { readable, writable } = new TransformStream();
+		const writer = writable.getWriter();
+		const reader = aiResponse.getReader();
+
+		const captureTask = (async () => {
+			let fullResponse = '';
+			const decoder = new TextDecoder();
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					await writer.write(value);
+
+					const chunk = decoder.decode(value, { stream: true });
+					const lines = chunk.split('\n');
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							const dataStr = line.slice(6).trim();
+							if (dataStr === '[DONE]') continue;
+							try {
+								const data = JSON.parse(dataStr);
+								fullResponse += data.response ?? data.choices?.[0]?.delta?.content ?? '';
+							} catch {
+								// ignore
+							}
+						}
+					}
+				}
+				if (fullResponse) {
+					await historyManager.addMessage(uId, prompt, fullResponse);
+				}
+			} catch (e) {
+				console.error('Error in stream processing:', e);
+			} finally {
+				await writer.close();
+			}
+		})();
+
+		if (platform.context) {
+			platform.context.waitUntil(captureTask);
 		}
-	});
+
+		return new Response(readable, {
+			headers: {
+				'Content-Type': 'text/event-stream',
+				'Cache-Control': 'no-cache',
+				Connection: 'keep-alive'
+			}
+		});
+	} catch (e) {
+		console.error('AI Error:', e);
+		return json({ error: `AI error: ${String(e)}` }, { status: 500 });
+	}
 };

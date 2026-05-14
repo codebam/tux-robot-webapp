@@ -22,6 +22,9 @@ export interface AiResponse {
 
 export interface Task {
 	type: 'code' | 'message' | 'business_message' | 'photo' | 'gen_photo' | 'voice' | 'tool_call';
+	updateType?: string;
+	guestQueryId?: string;
+	businessConnectionId?: string;
 	prompt: string;
 	userId?: number;
 	threadId?: number;

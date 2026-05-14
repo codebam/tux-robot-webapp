@@ -30,12 +30,19 @@
 					const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
 					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					data.history.forEach((h: any) => {
-						const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
-						if (match) {
-							parsedMessages.push({ role: 'user', content: match[1].trim() });
-							parsedMessages.push({ role: 'bot', content: match[2].trim() });
-						} else {
+						if (h.role === 'user') {
+							parsedMessages.push({ role: 'user', content: h.content.trim() });
+						} else if (h.role === 'assistant' || h.role === 'bot') {
 							parsedMessages.push({ role: 'bot', content: h.content.trim() });
+						} else {
+							// Fallback for older format or unknown roles
+							const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
+							if (match) {
+								parsedMessages.push({ role: 'user', content: match[1].trim() });
+								parsedMessages.push({ role: 'bot', content: match[2].trim() });
+							} else {
+								parsedMessages.push({ role: 'bot', content: h.content.trim() });
+							}
 						}
 					});
 					messages = parsedMessages;
@@ -56,7 +63,7 @@
 
 			try {
 				const res = await fetch(`/api/balance?initData=${encodeURIComponent(tg.initData)}`);
-				const resData = await res.json();
+				const resData = (await res.json()) as any;
 				if (resData.error) {
 					error = resData.error;
 				} else {
@@ -98,13 +105,13 @@
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json();
+				const errorData = (await response.json()) as any;
 				throw new Error(errorData.error || 'Failed to send message');
 			}
 
 			const contentType = response.headers.get('Content-Type');
 			if (contentType?.includes('application/json')) {
-				const data = await response.json();
+				const data = (await response.json()) as any;
 				if (data.type === 'command') {
 					messages = [...messages, { role: 'bot', content: data.message }];
 					if (currentPrompt.startsWith('/clear')) {
@@ -113,7 +120,7 @@
 					// Refresh balance
 					if (isTelegram && initData) {
 						const res = await fetch(`/api/balance?initData=${encodeURIComponent(initData)}`);
-						const resData = await res.json();
+						const resData = (await res.json()) as any;
 						if (!resData.error) {
 							balance = resData.balance;
 						}
@@ -157,7 +164,7 @@
 			// Refresh balance after message
 			if (isTelegram && initData) {
 				const res = await fetch(`/api/balance?initData=${encodeURIComponent(initData)}`);
-				const resData = await res.json();
+				const resData = (await res.json()) as any;
 				if (!resData.error) {
 					balance = resData.balance;
 				}
