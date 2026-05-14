@@ -138,15 +138,17 @@
 			messages = [...messages, botMessage];
 
 			const decoder = new TextDecoder();
+			let buffer = '';
 			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
 
-				const chunk = decoder.decode(value);
-				const lines = chunk.split('\n');
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() ?? '';
 				for (const line of lines) {
 					if (line.startsWith('data: ')) {
-						const dataStr = line.slice(6);
+						const dataStr = line.slice(6).trim();
 						if (dataStr === '[DONE]') break;
 						try {
 							const data = JSON.parse(dataStr);

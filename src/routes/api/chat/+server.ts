@@ -115,6 +115,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		const captureTask = (async () => {
 			let fullResponse = '';
 			const decoder = new TextDecoder();
+			let buffer = '';
 			try {
 				while (true) {
 					const { done, value } = await reader.read();
@@ -122,8 +123,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 					await writer.write(value);
 
-					const chunk = decoder.decode(value, { stream: true });
-					const lines = chunk.split('\n');
+					buffer += decoder.decode(value, { stream: true });
+					const lines = buffer.split('\n');
+					buffer = lines.pop() ?? '';
 					for (const line of lines) {
 						if (line.startsWith('data: ')) {
 							const dataStr = line.slice(6).trim();
