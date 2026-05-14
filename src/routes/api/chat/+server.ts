@@ -1,12 +1,12 @@
 import { type RequestHandler, json } from '@sveltejs/kit';
 import {
 	type Environment,
+	type Task,
 	HistoryManager,
 	getBalance,
 	AVAILABLE_MODELS,
 	SYSTEM_PROMPTS
 } from '$lib/server/chatUtils';
-import { runWithTools } from '@cloudflare/ai-utils';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return new Response('Platform not found', { status: 500 });
@@ -21,44 +21,6 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const uId = parseInt(userId);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
-
-	const fetchTool = {
-		name: 'fetch',
-		description:
-			'Perform an HTTP request to any API. Use this to get information from the internet.',
-		parameters: {
-			type: 'object',
-			properties: {
-				url: { type: 'string', description: 'The URL to fetch' },
-				method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE'], default: 'GET' },
-				headers: { type: 'object', description: 'HTTP headers to include in the request' },
-				body: { type: 'string', description: 'The request body' }
-			},
-			required: ['url']
-		},
-		run: async ({
-			url,
-			method,
-			headers,
-			body
-		}: {
-			url: string;
-			method?: string;
-			headers?: Record<string, string>;
-			body?: string;
-		}) => {
-			try {
-				const res = await fetch(url, {
-					method: method || 'GET',
-					headers: headers || {},
-					body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined
-				});
-				return await res.text();
-			} catch (e) {
-				return `Error executing fetch: ${String(e)}`;
-			}
-		}
-	};
 
 	// Handle / commands
 	if (prompt.startsWith('/')) {
@@ -110,40 +72,45 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const history = await historyManager.getHistory(uId);
 
-	const messages = [
-		{ role: 'system', content: SYSTEM_PROMPTS.TUX_ROBOT },
-		...history,
-		{ role: 'user', content: prompt }
-	];
+	const task: Task = {
+		type: modelConfig.supportsTools ? 'tool_call' : 'message',
+		prompt,
+		history,
+		modelId: modelConfig.id,
+		systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT,
+		stream: true
+	};
 
 	// Deduct balance
 	await env.CONVERSATION_HISTORY.put(`balance:${userId}`, JSON.stringify(balance - amount));
 
 	try {
-		const aiResponse = await runWithTools(
-			env.AI as any,
-			modelConfig.id as any,
-			{
-				messages: messages as any,
-				tools: modelConfig.supportsTools ? [fetchTool] : []
-			},
-			{
-				streamFinalResponse: true
-			}
-		);
+		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/', {
+			method: 'POST',
+			body: JSON.stringify(task),
+			headers: { 'Content-Type': 'application/json' }
+		});
 
-		if (!(aiResponse instanceof ReadableStream)) {
-			const content = (aiResponse as any).response || (aiResponse as any).choices?.[0]?.message?.content || '';
+		if (!response.ok) {
+			throw new Error(`AI Workflow error: ${response.statusText}`);
+		}
+
+		const contentType = response.headers.get('Content-Type');
+		if (contentType?.includes('application/json')) {
+			const data = (await response.json()) as any;
+			const content = data.response || data.choices?.[0]?.message?.content || '';
 			if (content) {
 				await historyManager.addMessage(uId, prompt, content);
 			}
 			return json({ message: content });
 		}
 
-		// Use a TransformStream to capture the full response for history
+		// It's a stream
 		const { readable, writable } = new TransformStream();
 		const writer = writable.getWriter();
-		const reader = aiResponse.getReader();
+		const reader = response.body?.getReader();
+
+		if (!reader) throw new Error('No reader for AI stream');
 
 		const captureTask = (async () => {
 			let fullResponse = '';

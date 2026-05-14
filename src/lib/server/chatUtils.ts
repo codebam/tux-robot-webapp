@@ -35,6 +35,7 @@ export interface Task {
 	telegramToken?: string;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	tools?: any[];
+	stream?: boolean;
 }
 
 export class HistoryManager {
