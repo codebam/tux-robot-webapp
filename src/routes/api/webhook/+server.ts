@@ -9,7 +9,8 @@ import {
 	SYSTEM_PROMPTS,
 	AI_MODELS,
 	AVAILABLE_MODELS,
-	markdownToHtml
+	markdownToHtml,
+	streamAiResponseGemma
 } from '$lib/server/chatUtils';
 
 type promiseFunc<T> = (resolve: (result: T) => void, reject: (e?: Error) => void) => Promise<T>;
@@ -22,116 +23,6 @@ function wrapPromise<T>(func: promiseFunc<T>, time = 1000) {
 			});
 		}, time);
 	});
-}
-
-async function streamAiResponseGemma(
-	bot: TelegramExecutionContext,
-	env: Environment,
-	model: string,
-	messages: { role: string; content: string }[],
-	max_completion_tokens?: number,
-	image?: number[]
-): Promise<string> {
-	const isGemini = model.startsWith('google/gemini');
-	const payload: Record<string, unknown> = {};
-
-	if (isGemini) {
-		payload.contents = messages.map((m) => ({
-			role: m.role === 'assistant' ? 'model' : 'user',
-			parts: [{ text: m.content }]
-		}));
-		const contents = payload.contents as {
-			role: string;
-			parts: { text?: string; inline_data?: { mime_type: string; data: string } }[];
-		}[];
-		if (image) {
-			contents[contents.length - 1].parts.push({
-				inline_data: {
-					mime_type: 'image/jpeg',
-					data: btoa(String.fromCharCode(...image))
-				}
-			});
-		}
-	} else {
-		payload.messages = messages;
-		payload.stream = true;
-		if (max_completion_tokens) payload.max_completion_tokens = max_completion_tokens;
-		if (image) payload.image = image;
-	}
-
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const response = await env.AI.run(model as any, payload, {
-		gateway: { id: 'default' }
-	});
-
-	const draft_id = Math.floor(Math.random() * 1000000) + 1;
-
-	if (!(response instanceof ReadableStream)) {
-		const data = response as AiResponse;
-		const content =
-			data.choices?.[0]?.message?.content ??
-			data.response ??
-			data.candidates?.[0]?.content?.parts?.[0]?.text ??
-			'';
-		if (content) await bot.streamReply(await markdownToHtml(content), draft_id, 'HTML');
-		return content;
-	}
-
-	const reader = (response as ReadableStream<Uint8Array>).getReader();
-	const decoder = new TextDecoder();
-	let fullResponse = '';
-	let lastUpdate = 0;
-	let buffer = '';
-
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-
-		buffer += decoder.decode(value, { stream: true });
-		const lines = buffer.split('\n');
-		buffer = lines.pop() ?? '';
-
-		for (const line of lines) {
-			const trimmedLine = line.trim();
-			if (!trimmedLine || trimmedLine === 'data: [DONE]') continue;
-
-			if (trimmedLine.startsWith('data: ')) {
-				try {
-					const data = JSON.parse(trimmedLine.slice(6)) as AiResponse;
-					const content =
-						data.choices?.[0]?.delta?.content ??
-						data.response ??
-						data.candidates?.[0]?.content?.parts?.[0]?.text ??
-						'';
-
-					if (content) {
-						fullResponse += content;
-						if (Date.now() - lastUpdate > 1000) {
-							try {
-								await bot.streamReply(await markdownToHtml(fullResponse), draft_id, 'HTML');
-							} catch {
-								/* ignore */
-							}
-							lastUpdate = Date.now();
-						}
-					}
-				} catch {
-					/* ignore */
-				}
-			}
-		}
-	}
-
-	try {
-		await new Promise((resolve) =>
-			setTimeout(resolve, Math.max(0, 1000 - (Date.now() - lastUpdate)))
-		);
-		await bot.streamReply(await markdownToHtml(fullResponse), draft_id, 'HTML');
-	} catch {
-		/* ignore */
-	}
-
-	return fullResponse;
 }
 
 async function processTask(
@@ -347,7 +238,6 @@ async function processTask(
 				];
 
 				for (let i = 0; i < 5; i++) {
-					 
 					const response = (await env.AI.run(
 						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						modelId as any,
@@ -506,7 +396,7 @@ async function chargeStars(
 
 	if (balance >= amount) {
 		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance - amount));
-		await processTask(bot, env, task, historyManager, ctx);
+		ctx.waitUntil(env.AI_WORKFLOW.create({ id: crypto.randomUUID(), params: task }));
 	} else {
 		if (bot.update_type === 'business_message' || bot.update_type === 'guest_message') {
 			await bot.reply(
