@@ -196,6 +196,14 @@ export async function markdownToHtml(s: string): Promise<string> {
 					else result += '\n';
 					i += fullTag.length;
 					continue;
+				} else if (/^h[1-6]$/.test(tagName)) {
+					if (isClosing) result += '</b>\n\n';
+					else result += '<b>';
+					i += fullTag.length;
+					continue;
+				} else {
+					i += fullTag.length;
+					continue;
 				}
 			}
 		}
