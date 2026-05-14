@@ -60,10 +60,9 @@ async function streamAiResponseGemma(
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const response = (await env.AI.run(model as any, payload, {
+	const response = await env.AI.run(model as any, payload, {
 		gateway: { id: 'default' }
-	}));
-
+	});
 
 	const draft_id = Math.floor(Math.random() * 1000000) + 1;
 
@@ -348,19 +347,24 @@ async function processTask(
 				];
 
 				for (let i = 0; i < 5; i++) {
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const response = (await env.AI.run(modelId as any, {
-						messages,
-						tools: tools.map((t) => ({
-							type: 'function',
-							function: {
-								name: t.name,
-								description: t.description,
-								parameters: t.parameters
-							}
-						}))
+					 
+					const response = (await env.AI.run(
 						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					})) as any;
+						modelId as any,
+						{
+							messages,
+							tools: tools.map((t) => ({
+								type: 'function',
+								function: {
+									name: t.name,
+									description: t.description,
+									parameters: t.parameters
+								}
+							}))
+						},
+						{ gateway: { id: 'default' } }
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					)) as any;
 
 					let toolCalls = response.tool_calls || response.choices?.[0]?.message?.tool_calls;
 
@@ -557,8 +561,16 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			headers?: Record<string, string>;
 			body?: string;
 		}) => {
-			const res = await fetch(url, { method: method || 'GET', headers, body });
-			return await res.text();
+			const res = await fetch(url, {
+				method: method || 'GET',
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Cloudflare Worker Telegram Bot)',
+					...headers
+				},
+				body
+			});
+			const text = await res.text();
+			return text.slice(0, 10000);
 		}
 	};
 
@@ -734,9 +746,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								task.tools = [fetchTool];
 							}
 
-							await chargeStars(bot, env, task, historyManager, ctx);
+							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx));
 						}
-						break;
+						return new Response('ok');
 					}
 					case 'photo': {
 						const photo = bot.update.message?.photo;
@@ -747,16 +759,18 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								bot.userId,
 								bot.update.message?.message_thread_id
 							);
-							await chargeStars(
-								bot,
-								env,
-								{ type: 'photo', prompt, history, fileId },
-								historyManager,
-								ctx,
-								10
+							ctx.waitUntil(
+								chargeStars(
+									bot,
+									env,
+									{ type: 'photo', prompt, history, fileId },
+									historyManager,
+									ctx,
+									10
+								)
 							);
 						}
-						break;
+						return new Response('ok');
 					}
 					case 'voice': {
 						// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -771,16 +785,18 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(bot.userId)}`)) ??
 								'gemma4';
 							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
-							await chargeStars(
-								bot,
-								env,
-								{ type: 'voice', prompt: '', history, fileId },
-								historyManager,
-								ctx,
-								modelConfig.cost + 20
+							ctx.waitUntil(
+								chargeStars(
+									bot,
+									env,
+									{ type: 'voice', prompt: '', history, fileId },
+									historyManager,
+									ctx,
+									modelConfig.cost + 20
+								)
 							);
 						}
-						break;
+						return new Response('ok');
 					}
 					case 'inline': {
 						const query = bot.update.inline_query?.query.toString() ?? '';
@@ -812,7 +828,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						} catch {
 							/* ignore */
 						}
-						break;
+						return new Response('ok');
 					}
 					case 'guest_message': {
 						let prompt = bot.update.guest_message?.text?.toString() ?? '';
@@ -841,9 +857,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								task.tools = [fetchTool];
 							}
 
-							await chargeStars(bot, env, task, historyManager, ctx);
+							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx));
 						}
-						break;
+						return new Response('ok');
 					}
 					case 'business_message': {
 						await bot.sendTyping();
@@ -862,21 +878,23 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						}
 						if (bot.userId && bot.userId !== 69148517) {
 							const history = await historyManager.getHistory(bot.userId);
-							await chargeStars(
-								bot,
-								env,
-								{
-									type: 'business_message',
-									prompt,
-									history,
-									fileId,
-									systemPrompt: SYSTEM_PROMPTS.SEAN
-								},
-								historyManager,
-								ctx
+							ctx.waitUntil(
+								chargeStars(
+									bot,
+									env,
+									{
+										type: 'business_message',
+										prompt,
+										history,
+										fileId,
+										systemPrompt: SYSTEM_PROMPTS.SEAN
+									},
+									historyManager,
+									ctx
+								)
 							);
 						}
-						break;
+						return new Response('ok');
 					}
 				}
 				return new Response('ok');
