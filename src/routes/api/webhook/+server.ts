@@ -421,7 +421,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						let prompt = bot.update.guest_message?.text?.toString() ?? '';
 						let botUsername = await env.CONVERSATION_HISTORY.get('bot_username');
 						if (!botUsername) {
-							const meRes = await bot.currentContext.api.getMe(bot.api.toString());
+							const meRes = await bot.api.getMe(bot.bot.api.toString());
 							if (meRes.ok) {
 								const me = (await meRes.json()) as { ok: boolean; result: { username: string } };
 								if (me.ok && me.result.username) {
