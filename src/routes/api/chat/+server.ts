@@ -5,7 +5,8 @@ import {
 	HistoryManager,
 	getBalance,
 	AVAILABLE_MODELS,
-	SYSTEM_PROMPTS
+	SYSTEM_PROMPTS,
+	verifyTelegramWebAppData
 } from '$lib/server/chatUtils';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	
 	let userId = cookies.get('userId');
 	if (!userId && body.initData) {
-		const isValid = await import('../balance/+server').then(m => m.verifyTelegramWebAppData(body.initData, env.SECRET_TELEGRAM_API_TOKEN)).catch(() => false);
+		const isValid = await verifyTelegramWebAppData(body.initData, env.SECRET_TELEGRAM_API_TOKEN);
 		if (isValid) {
 			const params = new URLSearchParams(body.initData);
 			const user = JSON.parse(params.get('user') ?? '{}');

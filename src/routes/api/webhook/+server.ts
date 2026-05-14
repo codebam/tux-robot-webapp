@@ -90,7 +90,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	const fetchTool = {
 		name: 'fetch',
 		description:
-			'Perform an HTTP request to any API. Use this to get information from the internet.',
+			'Make an HTTP request to fetch a website or API, returning the HTML or JSON. You MUST use this tool when the user asks to fetch a URL, visit a website, or make a GET request, instead of writing code.',
 		parameters: {
 			type: 'object',
 			properties: {

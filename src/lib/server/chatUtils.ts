@@ -229,3 +229,41 @@ export async function markdownToHtml(s: string): Promise<string> {
 
 	return result.trim();
 }
+
+export async function verifyTelegramWebAppData(initData: string, botToken: string): Promise<boolean> {
+	const params = new URLSearchParams(initData);
+	const hash = params.get('hash');
+	params.delete('hash');
+
+	const sortedParams = Array.from(params.entries())
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([key, value]) => `${key}=${value}`)
+		.join('\n');
+
+	const encoder = new TextEncoder();
+	const secretKey = await crypto.subtle.importKey(
+		'raw',
+		encoder.encode('WebAppData'),
+		{ name: 'HMAC', hash: 'SHA-256' },
+		false,
+		['sign']
+	);
+
+	const secret = await crypto.subtle.sign('HMAC', secretKey, encoder.encode(botToken));
+
+	const signatureKey = await crypto.subtle.importKey(
+		'raw',
+		secret,
+		{ name: 'HMAC', hash: 'SHA-256' },
+		false,
+		['sign']
+	);
+
+	const signature = await crypto.subtle.sign('HMAC', signatureKey, encoder.encode(sortedParams));
+
+	const signatureHex = Array.from(new Uint8Array(signature))
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
+
+	return signatureHex === hash;
+}
