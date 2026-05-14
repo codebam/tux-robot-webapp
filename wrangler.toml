@@ -16,4 +16,4 @@ bucket_name = "share"
 
 [[services]]
 binding = "AI_WORKFLOW"
-service = "ai-workflow-worker"
+service = "ai-workflow"
