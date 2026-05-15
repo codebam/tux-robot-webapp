@@ -64,6 +64,7 @@ async function chargeStars(
 	const amount = amountOverride ?? modelConfig.cost;
 
 	if (balance >= amount) {
+		bot.sendTyping().catch(console.error);
 		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance - amount));
 		task.telegramToken = env.SECRET_TELEGRAM_API_TOKEN;
 
