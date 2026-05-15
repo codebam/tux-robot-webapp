@@ -103,12 +103,16 @@ async function chargeStars(
 }
 
 export const POST: RequestHandler = async ({ request, platform }) => {
+	console.log('POST request received at /api/webhook');
 	if (!platform) return new Response('Platform not found', { status: 500 });
 	const env = platform.env as Environment;
 	const ctx = platform.context;
 
 	const token = env.SECRET_TELEGRAM_API_TOKEN?.trim();
-	if (!token) return new Response('Token missing', { status: 500 });
+	if (!token) {
+		console.error('SECRET_TELEGRAM_API_TOKEN is missing from environment');
+		return new Response('Token missing', { status: 500 });
+	}
 
 	const tuxrobot = new TelegramBot(token);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
