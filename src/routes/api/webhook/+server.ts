@@ -431,14 +431,14 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					}
 					case 'guest_message': {
 						let prompt = bot.update.guest_message?.text?.toString() ?? '';
-						let botUsername = await env.CONVERSATION_HISTORY.get('bot_username');
+						let botUsername = await env.CONVERSATION_HISTORY.get(`bot_username:${token.slice(0, 10)}`);
 						if (!botUsername) {
 							const meRes = await bot.api.getMe(bot.bot.api.toString());
 							if (meRes.ok) {
 								const me = (await meRes.json()) as { ok: boolean; result: { username: string } };
 								if (me.ok && me.result.username) {
 									botUsername = me.result.username;
-									await env.CONVERSATION_HISTORY.put('bot_username', botUsername, {
+									await env.CONVERSATION_HISTORY.put(`bot_username:${token.slice(0, 10)}`, botUsername, {
 										expirationTtl: 86400
 									});
 								}
