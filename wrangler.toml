@@ -18,20 +18,20 @@ bucket_name = "share"
 binding = "AI_WORKFLOW"
 service = "ai-workflow"
 
-[env.development]
+[env.preview]
 name = "tux-robot-webapp-dev"
 
-[env.development.ai]
+[env.preview.ai]
 binding = "AI"
 
-[[env.development.kv_namespaces]]
+[[env.preview.kv_namespaces]]
 binding = "CONVERSATION_HISTORY"
 id = "7c147881ce7d42b8811bfbf8c38e3ee4"
 
-[[env.development.r2_buckets]]
+[[env.preview.r2_buckets]]
 binding = "R2"
 bucket_name = "share"
 
-[[env.development.services]]
+[[env.preview.services]]
 binding = "AI_WORKFLOW"
 service = "ai-workflow-dev"
