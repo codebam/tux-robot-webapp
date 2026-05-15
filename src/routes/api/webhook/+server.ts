@@ -42,6 +42,7 @@ async function chargeStars(
 	task.userId = userId;
 	task.senderId = bot.userId;
 	task.chatId = bot.chatId;
+	task.updateId = bot.update.update_id;
 	task.updateType = bot.update_type;
 	task.guestQueryId = bot.update.guest_message?.guest_query_id;
 	task.businessConnectionId = bot.update.business_message?.business_connection_id?.toString();
