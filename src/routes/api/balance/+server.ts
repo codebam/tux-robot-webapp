@@ -20,7 +20,9 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 	const balanceKey = `balance:${String(userId)}`;
 	const balance = await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json');
 
-	const historyManager = await import('../../../lib/server/chatUtils').then(m => new m.HistoryManager(env.CONVERSATION_HISTORY));
+	const historyManager = await import('../../../lib/server/chatUtils').then(
+		(m) => new m.HistoryManager(env.CONVERSATION_HISTORY)
+	);
 	const history = await historyManager.getHistory(userId);
 
 	return json({ balance: balance ?? 200, userId, history });

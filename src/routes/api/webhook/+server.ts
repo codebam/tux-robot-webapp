@@ -1,5 +1,5 @@
 import { type RequestHandler } from '@sveltejs/kit';
-import TelegramBot, { TelegramExecutionContext } from '@codebam/cf-workers-telegram-bot';
+import TelegramBot, { TelegramExecutionContext, fetchTool } from '@codebam/cf-workers-telegram-bot';
 import {
 	type Environment,
 	type Task,
@@ -78,7 +78,7 @@ async function chargeStars(
 				method: 'POST',
 				body: JSON.stringify(task),
 				headers: { 'Content-Type': 'application/json' }
-			})
+			}).catch(console.error)
 		);
 	} else {
 		if (bot.update_type === 'business_message' || bot.update_type === 'guest_message') {
@@ -110,44 +110,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 	const tuxrobot = new TelegramBot(token);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
-
-	const fetchTool = {
-		name: 'fetch',
-		description:
-			'Make an HTTP request to fetch a website or API, returning the HTML or JSON. You MUST use this tool when the user asks to fetch a URL, visit a website, or make a GET request, instead of writing code.',
-		parameters: {
-			type: 'object',
-			properties: {
-				url: { type: 'string', description: 'The URL to fetch' },
-				method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE'], default: 'GET' },
-				headers: { type: 'object', description: 'HTTP headers to include in the request' },
-				body: { type: 'string', description: 'The request body' }
-			},
-			required: ['url']
-		},
-		function: async ({
-			url,
-			method,
-			headers,
-			body
-		}: {
-			url: string;
-			method?: string;
-			headers?: Record<string, string>;
-			body?: string;
-		}) => {
-			const res = await fetch(url, {
-				method: method || 'GET',
-				headers: {
-					'User-Agent': 'Mozilla/5.0 (Cloudflare Worker Telegram Bot)',
-					...headers
-				},
-				body
-			});
-			const text = await res.text();
-			return text.slice(0, 10000);
-		}
-	};
 
 	try {
 		const update = await request.json();
@@ -225,7 +187,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								[{ text: 'Open Web App', web_app: { url: 'https://tux-robot.codebam.ca' } }]
 							]
 						}
-					} as any
+					} as Record<string, unknown>
 				);
 			})
 			.command('request', async (bot: TelegramExecutionContext) => {
@@ -333,7 +295,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						method: 'POST',
 						body: JSON.stringify(task),
 						headers: { 'Content-Type': 'application/json' }
-					})
+					}).catch(console.error)
 				);
 				await env.CONVERSATION_HISTORY.delete(`task:${taskId}`);
 			})
@@ -366,7 +328,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								task.tools = [fetchTool];
 							}
 
-							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx));
+							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
 						}
 						return new Response('ok');
 					}
@@ -479,9 +441,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						const isMentioned = bot.update.guest_message?.entities?.some(
 							(e) =>
 								e.type === 'mention' &&
-								prompt
-									.substring(e.offset, e.offset + e.length)
-									.toLowerCase() === `@${(botUsername || 'TuxRobot').toLowerCase()}`
+								prompt.substring(e.offset, e.offset + e.length).toLowerCase() ===
+									`@${(botUsername || 'TuxRobot').toLowerCase()}`
 						);
 						if (!isMentioned) {
 							return new Response('ok');
@@ -511,7 +472,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								task.tools = [fetchTool];
 							}
 
-							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx));
+							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
 						}
 						return new Response('ok');
 					}
@@ -543,22 +504,19 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						if (userId && userId !== 69148517) {
 							const history = await historyManager.getHistory(userId);
 							const modelPreference =
-								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ??
-								'gemma4';
+								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ?? 'gemma4';
 							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 							const task: Task = {
 								type: 'business_message',
 								prompt,
 								history,
 								fileId,
-								systemPrompt: SYSTEM_PROMPTS.SEAN
+								systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT
 							};
 							if (modelConfig.supportsTools) {
 								task.tools = [fetchTool];
 							}
-							ctx.waitUntil(
-								chargeStars(bot, env, task, historyManager, ctx)
-							);
+							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
 						}
 						return new Response('ok');
 					}

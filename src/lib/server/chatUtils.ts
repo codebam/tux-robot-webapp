@@ -1,4 +1,4 @@
-import { marked } from 'marked';
+export { markdownToHtml } from '@codebam/cf-workers-telegram-bot';
 
 export interface Environment {
 	SECRET_TELEGRAM_API_TOKEN: string;
@@ -88,7 +88,8 @@ export async function getBalance(userId: number, env: Environment): Promise<numb
 }
 
 export const SYSTEM_PROMPTS = {
-	TUX_ROBOT: 'You are a friendly assistant named TuxRobot. You have access to an HTTP fetch tool. If a user asks you to get data from an API, look up a profile, or visit a website, you MUST execute the fetch tool yourself to get the data. DO NOT write code for the user to run; just get the data and summarize it. If the user replies with only a single word, sticker, or emoji, respond with no more than one short paragraph. Always keep replies below 4096 characters.',
+	TUX_ROBOT:
+		'You are a friendly assistant named TuxRobot. You have access to an HTTP fetch tool. If a user asks you to get data from an API, look up a profile, or visit a website, you MUST execute the fetch tool yourself to get the data. DO NOT write code for the user to run; just get the data and summarize it. If the user replies with only a single word, sticker, or emoji, respond with no more than one short paragraph. Always keep replies below 4096 characters.'
 };
 
 export const AI_MODELS = {
@@ -129,109 +130,10 @@ export const AVAILABLE_MODELS: Record<
 	'nemotron-3': { id: '@cf/nvidia/nemotron-3-120b-a12b', cost: 100, supportsTools: true }
 };
 
-export async function markdownToHtml(s: string): Promise<string> {
-	marked.setOptions(marked.getDefaults());
-	const parsed = (await marked.parse(s)) as string | { toString(): string };
-	const html = typeof parsed === 'string' ? parsed : parsed.toString();
-
-	const allowedTags = [
-		'b',
-		'strong',
-		'i',
-		'em',
-		'u',
-		'ins',
-		's',
-		'strike',
-		'del',
-		'code',
-		'pre',
-		'a',
-		'blockquote',
-		'span'
-	];
-	const tagStack: string[] = [];
-	let result = '';
-	let i = 0;
-
-	while (i < html.length) {
-		if (html[i] === '<') {
-			const tagMatch = /^<\/?([a-z1-6]+)(?:\s+[^>]*)?>/i.exec(html.slice(i));
-			if (tagMatch) {
-				const fullTag = tagMatch[0];
-				const tagName = tagMatch[1].toLowerCase();
-				const isClosing = fullTag.startsWith('</');
-
-				if (allowedTags.includes(tagName)) {
-					if (isClosing) {
-						if (tagStack.includes(tagName)) {
-							while (tagStack.length > 0) {
-								const top = tagStack.pop();
-								if (top) {
-									result += `</${top}>`;
-									if (top === tagName) break;
-								}
-							}
-						}
-					} else {
-						tagStack.push(tagName);
-						if (tagName === 'a') {
-							const hrefMatch = /href="([^"]*)"/i.exec(fullTag);
-							result += hrefMatch ? `<a href="${hrefMatch[1]}">` : '<a>';
-						} else {
-							result += `<${tagName}>`;
-						}
-					}
-					i += fullTag.length;
-					continue;
-				} else if (tagName === 'p') {
-					if (isClosing) result += '\n\n';
-					i += fullTag.length;
-					continue;
-				} else if (tagName === 'br') {
-					result += '\n';
-					i += fullTag.length;
-					continue;
-				} else if (tagName === 'li') {
-					if (!isClosing) result += '• ';
-					else result += '\n';
-					i += fullTag.length;
-					continue;
-				} else if (/^h[1-6]$/.test(tagName)) {
-					if (isClosing) result += '</b>\n\n';
-					else result += '<b>';
-					i += fullTag.length;
-					continue;
-				} else {
-					i += fullTag.length;
-					continue;
-				}
-			}
-		}
-
-		if (html[i] === '<') result += '&lt;';
-		else if (html[i] === '>') result += '&gt;';
-		else if (html[i] === '&') {
-			const entityMatch = /^&[a-z0-9#]+;/i.exec(html.slice(i));
-			if (entityMatch) {
-				result += entityMatch[0];
-				i += entityMatch[0].length;
-				continue;
-			}
-			result += '&amp;';
-		} else result += html[i];
-		i++;
-	}
-
-	while (tagStack.length > 0) {
-		const top = tagStack.pop();
-		if (top) result += `</${top}>`;
-	}
-
-	return result.trim();
-}
-
-export async function verifyTelegramWebAppData(initData: string, botToken: string): Promise<boolean> {
+export async function verifyTelegramWebAppData(
+	initData: string,
+	botToken: string
+): Promise<boolean> {
 	const params = new URLSearchParams(initData);
 	const hash = params.get('hash');
 	params.delete('hash');

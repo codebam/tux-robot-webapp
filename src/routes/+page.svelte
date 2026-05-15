@@ -60,16 +60,16 @@
 
 			try {
 				const res = await fetch(`/api/balance?initData=${encodeURIComponent(tg.initData)}`);
-				const resData = (await res.json()) as any;
+				const resData = (await res.json()) as Record<string, unknown>;
 				if (resData.error) {
 					error = resData.error;
 				} else {
 					balance = resData.balance;
 					userId = resData.userId;
-					
+
 					if (resData.history && messages.length === 0) {
 						const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
-						resData.history.forEach((h: any) => {
+						resData.history.forEach((h: Record<string, unknown>) => {
 							if (h.role === 'user') {
 								parsedMessages.push({ role: 'user', content: h.content.trim() });
 							} else if (h.role === 'assistant' || h.role === 'bot') {
@@ -116,11 +116,11 @@
 		await scrollToBottom();
 
 		try {
-			const bodyPayload: any = { prompt: currentPrompt };
+			const bodyPayload: Record<string, unknown> = { prompt: currentPrompt };
 			if (isTelegram && initData) {
 				bodyPayload.initData = initData;
 			}
-			
+
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -133,13 +133,13 @@
 			}
 
 			if (!response.ok) {
-				const errorData = (await response.json()) as any;
+				const errorData = (await response.json()) as Record<string, unknown>;
 				throw new Error(errorData.error || 'Failed to send message');
 			}
 
 			const contentType = response.headers.get('Content-Type');
 			if (contentType?.includes('application/json')) {
-				const data = (await response.json()) as any;
+				const data = (await response.json()) as Record<string, unknown>;
 				if (data.type === 'command') {
 					messages = [...messages, { role: 'bot', content: data.message }];
 					if (currentPrompt.startsWith('/clear')) {
@@ -148,7 +148,7 @@
 					// Refresh balance
 					if (isTelegram && initData) {
 						const res = await fetch(`/api/balance?initData=${encodeURIComponent(initData)}`);
-						const resData = (await res.json()) as any;
+						const resData = (await res.json()) as Record<string, unknown>;
 						if (!resData.error) {
 							balance = resData.balance;
 						}
@@ -190,7 +190,6 @@
 					}
 				}
 			}
-
 		} catch (e) {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			error = (e as any).message;

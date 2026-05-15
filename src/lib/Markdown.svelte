@@ -6,7 +6,7 @@
 	let tokens = $derived(marked.lexer(content));
 </script>
 
-{#snippet renderToken(token: any)}
+{#snippet renderToken(token: Record<string, unknown>)}
 	{#if token.type === 'paragraph'}
 		<p>
 			{#each token.tokens || [] as subToken, i (i)}
@@ -30,6 +30,7 @@
 	{:else if token.type === 'code'}
 		<pre><code>{token.text}</code></pre>
 	{:else if token.type === 'link'}
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 		<a href={token.href} title={token.title} target="_blank" rel="noopener noreferrer">
 			{#each token.tokens || [] as subToken, i (i)}
 				{@render renderToken(subToken)}

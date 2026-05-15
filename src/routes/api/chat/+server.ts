@@ -13,8 +13,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return new Response('Platform not found', { status: 500 });
 	const env = platform.env as Environment;
 
-	const body = (await request.json()) as any;
-	
+	const body = (await request.json()) as Record<string, unknown>;
+
 	let userId = cookies.get('userId');
 	if (!userId && body.initData) {
 		const isValid = await verifyTelegramWebAppData(body.initData, env.SECRET_TELEGRAM_API_TOKEN);
@@ -122,7 +122,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 		const contentType = response.headers.get('Content-Type');
 		if (contentType?.includes('application/json')) {
-			const data = (await response.json()) as any;
+			const data = (await response.json()) as Record<string, unknown>;
 			const content = data.response || data.choices?.[0]?.message?.content || '';
 			if (content) {
 				await historyManager.addMessage(uId, prompt, content);
@@ -175,7 +175,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		})();
 
 		if (platform.context) {
-			platform.context.waitUntil(captureTask);
+			platform.context.waitUntil(captureTask.catch(console.error));
 		}
 
 		return new Response(readable, {
