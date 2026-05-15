@@ -65,6 +65,14 @@ async function chargeStars(
 	if (balance >= amount) {
 		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance - amount));
 		task.telegramToken = env.SECRET_TELEGRAM_API_TOKEN;
+
+		const customPrompt = await env.CONVERSATION_HISTORY.get(`prompt:${String(userId)}`);
+		if (customPrompt) {
+			task.systemPrompt = customPrompt;
+		} else if (!task.systemPrompt) {
+			task.systemPrompt = SYSTEM_PROMPTS.TUX_ROBOT;
+		}
+
 		ctx.waitUntil(
 			env.AI_WORKFLOW.fetch('https://workflow.local/', {
 				method: 'POST',
@@ -159,6 +167,41 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				await env.R2.put(id, await fileResponse.arrayBuffer());
 				await bot.reply(`https://r2.seanbehan.ca/${id}`);
 			})
+			.command('prompt', async (bot: TelegramExecutionContext) => {
+				if (bot.userId) {
+					const fullText = bot.text;
+					const commandPart = '/prompt';
+					let promptValue = fullText
+						.substring(fullText.indexOf(commandPart) + commandPart.length)
+						.trim();
+
+					if (
+						promptValue === 'reset' ||
+						promptValue === '""' ||
+						promptValue === "''" ||
+						promptValue === ''
+					) {
+						await env.CONVERSATION_HISTORY.delete(`prompt:${String(bot.userId)}`);
+						await bot.reply('System prompt reset to default.');
+					} else {
+						// Remove surrounding quotes if present
+						if (
+							(promptValue.startsWith('"') && promptValue.endsWith('"')) ||
+							(promptValue.startsWith("'") && promptValue.endsWith("'"))
+						) {
+							promptValue = promptValue.substring(1, promptValue.length - 1);
+						}
+
+						if (promptValue === '') {
+							await env.CONVERSATION_HISTORY.delete(`prompt:${String(bot.userId)}`);
+							await bot.reply('System prompt reset to default.');
+						} else {
+							await env.CONVERSATION_HISTORY.put(`prompt:${String(bot.userId)}`, promptValue);
+							await bot.reply(`System prompt updated to:\n\n${promptValue}`);
+						}
+					}
+				}
+			})
 			.command('start', async (bot: TelegramExecutionContext) => {
 				await bot.reply(
 					'Welcome! Here are my commands:\n' +
@@ -167,6 +210,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						'/photo <prompt> - Generate an image (100 Stars)\n' +
 						'/model <name> - Switch AI model and see costs\n' +
 						'/code <prompt> - Generate code snippets\n' +
+						'/prompt <"prompt"> - Set your custom system prompt (use "" or reset to clear)\n' +
 						'/request <prompt> - Make arbitrary API requests (uses fetch tool)\n' +
 						'<prompt> - Generate text (may use tools if supported by model)\n' +
 						'Send a voice note - Transform your bot into a voice assistant (+20 Stars)\n' +
