@@ -117,6 +117,11 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	const tuxrobot = new TelegramBot(token);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
 
+	const botTtl = await env.CONVERSATION_HISTORY.get<number>(`ttl:${token.slice(0, 10)}`, 'json');
+	if (botTtl) {
+		tuxrobot.ttl = botTtl;
+	}
+
 	try {
 		const update = await request.json();
 		console.log('Incoming Update:', JSON.stringify(update));
@@ -177,6 +182,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						'/load <amount> - Top up your balance with Telegram Stars\n' +
 						'/photo <prompt> - Generate an image (100 Stars)\n' +
 						'/model <name> - Switch AI model and see costs\n' +
+						'/ttl <1-5> - Set the TTL for bot-to-bot responses\n' +
 						'/code <prompt> - Generate code snippets\n' +
 						'/prompt <"prompt"> - Set your custom system prompt (use "" or reset to clear)\n' +
 						'/request <prompt> - Make arbitrary API requests (uses fetch tool)\n' +
@@ -242,6 +248,21 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			.command('code', async (bot: TelegramExecutionContext) => {
 				const prompt = bot.args.slice(1).join(' ');
 				await chargeStars(bot, env, { type: 'code', prompt }, historyManager, ctx);
+			})
+			.command('ttl', async (bot: TelegramExecutionContext) => {
+				const newTtl = parseInt(bot.args[1]);
+				if (newTtl >= 1 && newTtl <= 5) {
+					bot.bot.ttl = newTtl;
+					await env.CONVERSATION_HISTORY.put(
+						`ttl:${token.slice(0, 10)}`,
+						JSON.stringify(newTtl)
+					);
+					await bot.reply(`TTL set to ${bot.bot.ttl}`);
+				} else {
+					await bot.reply(
+						`Invalid TTL. Please use a value between 1 and 5. Current TTL: ${bot.bot.ttl}`
+					);
+				}
 			})
 			.command('model', async (bot: TelegramExecutionContext) => {
 				if (bot.userId) {
