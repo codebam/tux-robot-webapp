@@ -126,6 +126,39 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		tuxrobot.ttl = botTtl;
 	}
 
+	tuxrobot.use(async (bot: TelegramExecutionContext) => {
+		let isSelf = bot.userId === bot.bot.botId;
+
+		if (
+			!isSelf &&
+			bot.update_type === 'business_message' &&
+			bot.update.business_message?.business_connection_id
+		) {
+			const ownerId = await env.CONVERSATION_HISTORY.get<number>(
+				`business_connection:${bot.update.business_message.business_connection_id}`,
+				'json'
+			);
+			if (ownerId === bot.bot.botId) {
+				isSelf = true;
+			}
+		}
+
+		const counterKey = `ttl_counter:${bot.chatId}:${token.slice(0, 10)}`;
+
+		if (isSelf) {
+			const count = (await env.CONVERSATION_HISTORY.get<number>(counterKey, 'json')) ?? 0;
+			if (count >= bot.bot.ttl) {
+				console.log(`TTL exceeded for chat ${bot.chatId}`);
+				return new Response('ok');
+			}
+			await env.CONVERSATION_HISTORY.put(counterKey, JSON.stringify(count + 1), {
+				expirationTtl: 3600
+			});
+		} else {
+			await env.CONVERSATION_HISTORY.delete(counterKey);
+		}
+	});
+
 	try {
 		const update = await request.json();
 		console.log('Incoming Update:', JSON.stringify(update));
