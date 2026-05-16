@@ -14,7 +14,7 @@ jobs:
         with:
           node-version: latest
           registry-url: https://npm.pkg.github.com/
-          scope: "@codebam"
+          scope: '@codebam'
       - run: npm install @codebam/cf-workers-telegram-bot@nightly
         env:
           NPM_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}

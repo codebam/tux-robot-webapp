@@ -41,7 +41,10 @@ async function chargeStars(
 		}
 	}
 
-	if (!userId || userId === bot.bot.botId) return;
+	if (!userId || userId === bot.bot.botId) {
+		console.log(`Skipping chargeStars: userId=${userId}, botId=${bot.bot.botId}`);
+		return;
+	}
 
 	task.userId = userId;
 	task.senderId = bot.userId;
@@ -77,6 +80,10 @@ async function chargeStars(
 			task.systemPrompt = customPrompt;
 		} else if (!task.systemPrompt) {
 			task.systemPrompt = SYSTEM_PROMPTS.TUX_ROBOT;
+		}
+
+		if (!task.history) {
+			task.history = await historyManager.getHistory(userId, task.threadId);
 		}
 
 		ctx.waitUntil(
@@ -127,7 +134,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	}
 
 	tuxrobot.use(async (bot: TelegramExecutionContext) => {
-		let isSelf = bot.userId === bot.bot.botId;
+		const botId = bot.bot.botId;
+		const userId = bot.userId;
+		let isSelf = userId === botId;
+
+		console.log(
+			`Middleware check: userId=${userId}, botId=${botId}, isSelf=${isSelf}, updateType=${bot.update_type}`
+		);
 
 		if (
 			!isSelf &&
@@ -138,7 +151,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				`business_connection:${bot.update.business_message.business_connection_id}`,
 				'json'
 			);
-			if (ownerId === bot.bot.botId) {
+			console.log(`Business connection owner check: ownerId=${ownerId}`);
+			if (ownerId === botId) {
 				isSelf = true;
 			}
 		}
@@ -147,14 +161,16 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		if (isSelf) {
 			const count = (await env.CONVERSATION_HISTORY.get<number>(counterKey, 'json')) ?? 0;
+			console.log(`Self-response detected. Current count: ${count}, TTL limit: ${bot.bot.ttl}`);
 			if (count >= bot.bot.ttl) {
-				console.log(`TTL exceeded for chat ${bot.chatId}`);
+				console.log(`TTL exceeded for chat ${bot.chatId}. Blocking update.`);
 				return new Response('ok');
 			}
 			await env.CONVERSATION_HISTORY.put(counterKey, JSON.stringify(count + 1), {
 				expirationTtl: 3600
 			});
 		} else {
+			console.log(`Human message detected. Resetting TTL counter for chat ${bot.chatId}`);
 			await env.CONVERSATION_HISTORY.delete(counterKey);
 		}
 	});
@@ -290,10 +306,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				const newTtl = parseInt(bot.args[1]);
 				if (newTtl >= 1 && newTtl <= 5) {
 					bot.bot.ttl = newTtl;
-					await env.CONVERSATION_HISTORY.put(
-						`ttl:${token.slice(0, 10)}`,
-						JSON.stringify(newTtl)
-					);
+					await env.CONVERSATION_HISTORY.put(`ttl:${token.slice(0, 10)}`, JSON.stringify(newTtl));
 					await bot.reply(`TTL set to ${bot.bot.ttl}`);
 				} else {
 					await bot.reply(
@@ -373,75 +386,33 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							if (replyText)
 								prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
 						}
-						if (bot.userId) {
-							const history = await historyManager.getHistory(
-								bot.userId,
-								bot.update.message?.message_thread_id
-							);
-							const modelPreference =
-								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(bot.userId)}`)) ??
-								'gemma4';
-							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 
-							const task: Task = {
-								type: modelConfig.supportsTools ? 'tool_call' : 'message',
-								prompt,
-								history
-							};
-							if (modelConfig.supportsTools) {
-								task.tools = [fetchTool];
-							}
+						const task: Task = {
+							type: 'message',
+							prompt
+						};
 
-							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
-						}
+						ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
 						return new Response('ok');
 					}
 					case 'photo': {
 						const photo = bot.update.message?.photo;
 						const fileId = photo ? (photo[photo.length - 1]?.file_id ?? '') : '';
 						const prompt = bot.update.message?.caption ?? 'Please describe this image';
-						if (bot.userId) {
-							const history = await historyManager.getHistory(
-								bot.userId,
-								bot.update.message?.message_thread_id
-							);
-							ctx.waitUntil(
-								chargeStars(
-									bot,
-									env,
-									{ type: 'photo', prompt, history, fileId },
-									historyManager,
-									ctx,
-									10
-								)
-							);
-						}
+
+						ctx.waitUntil(
+							chargeStars(bot, env, { type: 'photo', prompt, fileId }, historyManager, ctx, 10)
+						);
 						return new Response('ok');
 					}
 					case 'voice': {
 						// eslint-disable-next-line @typescript-eslint/no-explicit-any
 						const voice = (bot.update.message as any)?.voice;
 						const fileId = voice?.file_id ?? '';
-						if (bot.userId) {
-							const history = await historyManager.getHistory(
-								bot.userId,
-								bot.update.message?.message_thread_id
-							);
-							const modelPreference =
-								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(bot.userId)}`)) ??
-								'gemma4';
-							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
-							ctx.waitUntil(
-								chargeStars(
-									bot,
-									env,
-									{ type: 'voice', prompt: '', history, fileId },
-									historyManager,
-									ctx,
-									modelConfig.cost + 20
-								)
-							);
-						}
+
+						ctx.waitUntil(
+							chargeStars(bot, env, { type: 'voice', prompt: '', fileId }, historyManager, ctx)
+						);
 						return new Response('ok');
 					}
 					case 'inline': {
@@ -489,16 +460,22 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					}
 					case 'guest_message': {
 						let prompt = bot.update.guest_message?.text?.toString() ?? '';
-						let botUsername = await env.CONVERSATION_HISTORY.get(`bot_username:${token.slice(0, 10)}`);
+						let botUsername = await env.CONVERSATION_HISTORY.get(
+							`bot_username:${token.slice(0, 10)}`
+						);
 						if (!botUsername) {
 							const meRes = await bot.api.getMe(bot.bot.api.toString());
 							if (meRes.ok) {
 								const me = (await meRes.json()) as { ok: boolean; result: { username: string } };
 								if (me.ok && me.result.username) {
 									botUsername = me.result.username;
-									await env.CONVERSATION_HISTORY.put(`bot_username:${token.slice(0, 10)}`, botUsername, {
-										expirationTtl: 86400
-									});
+									await env.CONVERSATION_HISTORY.put(
+										`bot_username:${token.slice(0, 10)}`,
+										botUsername,
+										{
+											expirationTtl: 86400
+										}
+									);
 								}
 							}
 						}
@@ -518,26 +495,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
 							}
 						}
-						const userId = bot.update.guest_message?.from.id;
-						if (userId) {
-							const threadId = bot.update.guest_message?.message_thread_id;
-							const history = await historyManager.getHistory(userId, threadId);
 
-							const modelPreference =
-								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ?? 'gemma4';
-							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+						const task: Task = {
+							type: 'message',
+							prompt
+						};
 
-							const task: Task = {
-								type: modelConfig.supportsTools ? 'tool_call' : 'message',
-								prompt,
-								history
-							};
-							if (modelConfig.supportsTools) {
-								task.tools = [fetchTool];
-							}
-
-							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
-						}
+						ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
 						return new Response('ok');
 					}
 					case 'business_message': {
@@ -555,33 +519,14 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 								prompt = `Context of the message I am replying to: "${replyText}"\n\nMy message: ${prompt}`;
 							}
 						}
-						let userId = bot.userId;
-						if (bot.update.business_message?.business_connection_id) {
-							const ownerId = await env.CONVERSATION_HISTORY.get<number>(
-								`business_connection:${bot.update.business_message.business_connection_id}`,
-								'json'
-							);
-							if (ownerId) {
-								userId = ownerId;
-							}
-						}
-						if (userId && userId !== 69148517) {
-							const history = await historyManager.getHistory(userId);
-							const modelPreference =
-								(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ?? 'gemma4';
-							const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
-							const task: Task = {
-								type: 'business_message',
-								prompt,
-								history,
-								fileId,
-								systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT
-							};
-							if (modelConfig.supportsTools) {
-								task.tools = [fetchTool];
-							}
-							ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
-						}
+
+						const task: Task = {
+							type: 'business_message',
+							prompt,
+							fileId,
+							systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT
+						};
+						ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
 						return new Response('ok');
 					}
 				}

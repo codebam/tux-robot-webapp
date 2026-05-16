@@ -1,4 +1,4 @@
-export { markdownToHtml } from '@codebam/cf-workers-telegram-bot';
+export { markdownToHtml, HistoryManager, getBalance } from '@codebam/cf-workers-telegram-bot';
 
 export interface Environment {
 	SECRET_TELEGRAM_API_TOKEN: string;
@@ -39,53 +39,6 @@ export interface Task {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	tools?: any[];
 	stream?: boolean;
-}
-
-export class HistoryManager {
-	constructor(private kv: KVNamespace) {}
-
-	private getKey(userId: number, threadId?: number): string {
-		return threadId ? `history:${String(userId)}:${String(threadId)}` : `history:${String(userId)}`;
-	}
-
-	async getHistory(
-		userId: number,
-		threadId?: number
-	): Promise<{ role: string; content: string }[]> {
-		if (!this.kv) return [];
-		const history = await this.kv.get<{ role: string; content: string }[]>(
-			this.getKey(userId, threadId),
-			'json'
-		);
-		return history ?? [];
-	}
-
-	async addMessage(userId: number, prompt: string, response: string, threadId?: number) {
-		if (!this.kv) return;
-		const history = await this.getHistory(userId, threadId);
-		history.push({ role: 'user', content: prompt });
-		history.push({ role: 'assistant', content: response });
-		const trimmedHistory = history.slice(-20);
-		await this.kv.put(this.getKey(userId, threadId), JSON.stringify(trimmedHistory), {
-			expirationTtl: 86400
-		});
-	}
-
-	async clearHistory(userId: number, threadId?: number) {
-		if (!this.kv) return;
-		await this.kv.delete(this.getKey(userId, threadId));
-	}
-}
-
-export async function getBalance(userId: number, env: Environment): Promise<number> {
-	const balanceKey = `balance:${String(userId)}`;
-	const balance = await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json');
-	if (balance === null) {
-		const defaultBalance = 200;
-		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(defaultBalance));
-		return defaultBalance;
-	}
-	return balance;
 }
 
 export const SYSTEM_PROMPTS = {
