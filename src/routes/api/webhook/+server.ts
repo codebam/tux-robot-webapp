@@ -19,25 +19,29 @@ async function chargeStars(
 	ctx: ExecutionContext,
 	amountOverride?: number
 ) {
-	let userId =
-		bot.update.message?.from.id ??
-		bot.update.business_message?.from.id ??
-		bot.update.guest_message?.from.id;
+	let userId = bot.userId;
 
-	if (
-		bot.update_type === 'business_message' &&
-		bot.update.business_message?.business_connection_id
-	) {
-		const ownerId = await env.CONVERSATION_HISTORY.get<number>(
-			`business_connection:${bot.update.business_message.business_connection_id}`,
-			'json'
-		);
-		if (ownerId) {
-			userId = ownerId;
+	if (bot.isBot) {
+		if (
+			bot.update_type === 'business_message' &&
+			bot.update.business_message?.business_connection_id
+		) {
+			const ownerId = await env.CONVERSATION_HISTORY.get<number>(
+				`business_connection:${bot.update.business_message.business_connection_id}`,
+				'json'
+			);
+			if (ownerId) {
+				userId = ownerId;
+			}
+		} else if (
+			bot.update.message?.chat.type === 'private' ||
+			bot.update.business_message?.chat.type === 'private'
+		) {
+			userId = parseInt(bot.chatId);
 		}
 	}
 
-	if (!userId) return;
+	if (!userId || userId === bot.bot.botId) return;
 
 	task.userId = userId;
 	task.senderId = bot.userId;
