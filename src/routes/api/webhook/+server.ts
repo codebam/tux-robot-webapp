@@ -54,7 +54,7 @@ async function chargeStars(
 	task.threadId =
 		bot.update.message?.message_thread_id ?? bot.update.guest_message?.message_thread_id;
 	const balanceKey = `balance:${String(userId)}`;
-	const balance = await getBalance(userId, env);
+	const balance = await getBalance(userId, env.CONVERSATION_HISTORY);
 
 	const modelPreference =
 		(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ?? 'gemma4';
@@ -251,7 +251,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			})
 			.command('balance', async (bot: TelegramExecutionContext) => {
 				if (bot.userId) {
-					const balance = await getBalance(bot.userId, env);
+					const balance = await getBalance(bot.userId, env.CONVERSATION_HISTORY);
 					await bot.reply(`Your current balance is ${String(balance)} Stars.`);
 				}
 			})
