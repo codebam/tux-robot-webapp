@@ -21,22 +21,19 @@ async function chargeStars(
 ) {
 	let userId = bot.userId;
 
-	if (bot.isBot) {
-		if (
-			bot.update_type === 'business_message' &&
-			bot.update.business_message?.business_connection_id
-		) {
-			const ownerId = await env.CONVERSATION_HISTORY.get<number>(
-				`business_connection:${bot.update.business_message.business_connection_id}`,
+	if (bot.update_type === 'business_message') {
+		const connectionId = bot.update.business_message?.business_connection_id;
+		if (connectionId) {
+			const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
+				`business_connection:${connectionId}`,
 				'json'
 			);
-			if (ownerId) {
-				userId = ownerId;
+			if (ownerData?.id) {
+				userId = ownerData.id;
 			}
-		} else if (
-			bot.update.message?.chat.type === 'private' ||
-			bot.update.business_message?.chat.type === 'private'
-		) {
+		}
+	} else if (bot.isBot) {
+		if (bot.update.message?.chat.type === 'private') {
 			userId = parseInt(bot.chatId);
 		}
 	}
@@ -431,9 +428,15 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					case 'business_connection': {
 						const connection = bot.update.business_connection;
 						if (connection) {
+							const ownerName = [connection.user.first_name, connection.user.last_name]
+								.filter(Boolean)
+								.join(' ');
 							await env.CONVERSATION_HISTORY.put(
 								`business_connection:${connection.id}`,
-								JSON.stringify(connection.user.id)
+								JSON.stringify({
+									id: connection.user.id,
+									name: ownerName || 'the business owner'
+								})
 							);
 						}
 						return new Response('ok');
@@ -500,11 +503,21 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							}
 						}
 
+						const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
+							`business_connection:${bot.update.business_message?.business_connection_id}`,
+							'json'
+						);
+
+						const systemPrompt = SYSTEM_PROMPTS.BUSINESS_MODE.replace(
+							'the business owner',
+							ownerData?.name || 'the business owner'
+						);
+
 						const task: Task = {
 							type: 'business_message',
 							prompt,
 							fileId,
-							systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT
+							systemPrompt
 						};
 						ctx.waitUntil(chargeStars(bot, env, task, historyManager, ctx).catch(console.error));
 						return new Response('ok');
