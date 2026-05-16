@@ -136,26 +136,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	tuxrobot.use(async (bot: TelegramExecutionContext) => {
 		const botId = bot.bot.botId;
 		const userId = bot.userId;
-		let isSelf = userId === botId;
-
-		console.log(
-			`Middleware check: userId=${userId}, botId=${botId}, isSelf=${isSelf}, updateType=${bot.update_type}`
-		);
-
-		if (
-			!isSelf &&
-			bot.update_type === 'business_message' &&
-			bot.update.business_message?.business_connection_id
-		) {
-			const ownerId = await env.CONVERSATION_HISTORY.get<number>(
-				`business_connection:${bot.update.business_message.business_connection_id}`,
-				'json'
-			);
-			console.log(`Business connection owner check: ownerId=${ownerId}`);
-			if (ownerId === botId) {
-				isSelf = true;
-			}
-		}
+		const isSelf = userId === botId;
 
 		const counterKey = `ttl_counter:${bot.chatId}:${token.slice(0, 10)}`;
 
@@ -170,7 +151,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				expirationTtl: 3600
 			});
 		} else {
-			console.log(`Human message detected. Resetting TTL counter for chat ${bot.chatId}`);
 			await env.CONVERSATION_HISTORY.delete(counterKey);
 		}
 	});
