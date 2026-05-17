@@ -20,10 +20,10 @@ async function getBusinessOwnerData(
 		`business_connection:${connectionId}`,
 		'json'
 	);
-	if (ownerData) {
+	if (ownerData && ownerData.username !== undefined) {
 		console.log(`[getBusinessOwnerData] Cache HIT for connection ${connectionId}:`, JSON.stringify(ownerData));
 	} else {
-		console.log(`[getBusinessOwnerData] Cache MISS for connection ${connectionId}. Fetching from Telegram API...`);
+		console.log(`[getBusinessOwnerData] Cache MISS or stale entry for connection ${connectionId}. Fetching from Telegram API...`);
 		try {
 			const response = await bot.api.getBusinessConnection(
 				bot.bot.api.toString(),
@@ -46,6 +46,10 @@ async function getBusinessOwnerData(
 					if (id) {
 						ownerData = { id, name, username };
 						console.log(`[getBusinessOwnerData] Successfully resolved owner: id=${id}, name=${name}, username=${username ?? ''}. Caching in KV...`);
+						await env.CONVERSATION_HISTORY.put(
+							`active_connection:${id}`,
+							connectionId
+						);
 						await env.CONVERSATION_HISTORY.put(
 							`business_connection:${connectionId}`,
 							JSON.stringify(ownerData)
@@ -269,6 +273,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				}
 			})
 			.command('facts', async (bot: TelegramExecutionContext) => {
+				console.log(`[/facts command] Triggered. userId: ${bot.userId}, text: ${bot.text}`);
 				if (bot.userId) {
 					const fullText = bot.text;
 					const commandPart = '/facts';
@@ -276,13 +281,31 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						.substring(fullText.indexOf(commandPart) + commandPart.length)
 						.trim();
 
+					console.log(`[/facts command] Extracted factsValue: "${factsValue}"`);
+
 					if (
 						factsValue === 'reset' ||
 						factsValue === '""' ||
 						factsValue === "''" ||
 						factsValue === ''
 					) {
+						console.log(`[/facts command] Clearing facts for owner: ${bot.userId}`);
 						await env.CONVERSATION_HISTORY.delete(`business_facts:${String(bot.userId)}`);
+						const connectionId = await env.CONVERSATION_HISTORY.get(`active_connection:${bot.userId}`);
+						if (connectionId) {
+							const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string; username?: string }>(
+								`business_connection:${connectionId}`,
+								'json'
+							);
+							if (ownerData) {
+								if (ownerData.username) {
+									await env.CONVERSATION_HISTORY.delete(`business_facts:${ownerData.username}`);
+								}
+								if (ownerData.name) {
+									await env.CONVERSATION_HISTORY.delete(`business_facts:${ownerData.name}`);
+								}
+							}
+						}
 						await bot.reply('Business facts cleared.');
 					} else {
 						// Remove surrounding quotes if present
@@ -294,13 +317,51 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						}
 
 						if (factsValue === '') {
+							console.log(`[/facts command] Clearing facts for owner: ${bot.userId}`);
 							await env.CONVERSATION_HISTORY.delete(`business_facts:${String(bot.userId)}`);
+							const connectionId = await env.CONVERSATION_HISTORY.get(`active_connection:${bot.userId}`);
+							if (connectionId) {
+								const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string; username?: string }>(
+									`business_connection:${connectionId}`,
+									'json'
+								);
+								if (ownerData) {
+									if (ownerData.username) {
+										await env.CONVERSATION_HISTORY.delete(`business_facts:${ownerData.username}`);
+									}
+									if (ownerData.name) {
+										await env.CONVERSATION_HISTORY.delete(`business_facts:${ownerData.name}`);
+									}
+								}
+							}
 							await bot.reply('Business facts cleared.');
 						} else {
+							console.log(`[/facts command] Saving facts under key: business_facts:${bot.userId}`);
 							await env.CONVERSATION_HISTORY.put(`business_facts:${String(bot.userId)}`, factsValue);
+							
+							const connectionId = await env.CONVERSATION_HISTORY.get(`active_connection:${bot.userId}`);
+							console.log(`[/facts command] Retrieved active connection ID: ${connectionId ?? 'null'}`);
+							if (connectionId) {
+								const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string; username?: string }>(
+									`business_connection:${connectionId}`,
+									'json'
+								);
+								if (ownerData) {
+									if (ownerData.username) {
+										console.log(`[/facts command] Also caching facts under username: business_facts:${ownerData.username}`);
+										await env.CONVERSATION_HISTORY.put(`business_facts:${ownerData.username}`, factsValue);
+									}
+									if (ownerData.name) {
+										console.log(`[/facts command] Also caching facts under name: business_facts:${ownerData.name}`);
+										await env.CONVERSATION_HISTORY.put(`business_facts:${ownerData.name}`, factsValue);
+									}
+								}
+							}
 							await bot.reply(`Business facts updated to:\n\n${factsValue}`);
 						}
 					}
+				} else {
+					console.warn('[/facts command] bot.userId is undefined!');
 				}
 			})
 			.command('start', async (bot: TelegramExecutionContext) => {
@@ -537,10 +598,16 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						if (connection) {
 							const ownerName = connection.user.first_name;
 							const username = connection.user.username;
+							const ownerId = connection.user.id;
+							console.log(`[business_connection] Storing active connection for ownerId ${ownerId}: ${connection.id}`);
+							await env.CONVERSATION_HISTORY.put(
+								`active_connection:${ownerId}`,
+								connection.id
+							);
 							await env.CONVERSATION_HISTORY.put(
 								`business_connection:${connection.id}`,
 								JSON.stringify({
-									id: connection.user.id,
+									id: ownerId,
 									name: ownerName || 'the business owner',
 									username: username
 								})
