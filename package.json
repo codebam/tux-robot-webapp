@@ -1,7 +1,7 @@
 {
 	"name": "webapp",
 	"private": true,
-	"version": "0.0.30",
+	"version": "0.0.31",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -43,7 +43,7 @@
 	},
 	"dependencies": {
 		"@cloudflare/ai-utils": "^1.0.1",
-		"@codebam/cf-workers-telegram-bot": "^12.6.19",
+		"@codebam/cf-workers-telegram-bot": "^12.6.20",
 		"marked": "^18.0.3"
 	}
 }
