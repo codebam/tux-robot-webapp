@@ -520,14 +520,47 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							}
 						}
 
-						const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
-							`business_connection:${bot.update.business_message?.business_connection_id}`,
-							'json'
-						);
+						let ownerName = 'the business owner';
+						const connectionId = bot.update.business_message?.business_connection_id;
+						if (connectionId) {
+							let ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
+								`business_connection:${connectionId}`,
+								'json'
+							);
+							if (!ownerData) {
+								try {
+									const response = await bot.api.getBusinessConnection(
+										bot.bot.api.toString(),
+										connectionId
+									);
+									if (response.status === 200) {
+										const json = (await response.json()) as {
+											ok: boolean;
+											result: { user: { first_name: string; last_name?: string; id: number } };
+										};
+										if (json.ok && json.result) {
+											const name = [json.result.user.first_name, json.result.user.last_name]
+												.filter(Boolean)
+												.join(' ');
+											ownerData = { id: json.result.user.id, name };
+											await env.CONVERSATION_HISTORY.put(
+												`business_connection:${connectionId}`,
+												JSON.stringify(ownerData)
+											);
+										}
+									}
+								} catch (e) {
+									console.error('Failed to fetch business connection:', e);
+								}
+							}
+							if (ownerData?.name) {
+								ownerName = ownerData.name;
+							}
+						}
 
 						const systemPrompt = SYSTEM_PROMPTS.BUSINESS_MODE.replaceAll(
 							'{owner_name}',
-							ownerData?.name || 'the business owner'
+							ownerName
 						);
 
 						const task: Task = {
