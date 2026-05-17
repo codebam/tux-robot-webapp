@@ -24,8 +24,9 @@ async function chargeStars(
 
 	if (bot.update_type === 'business_message') {
 		const connectionId = bot.update.business_message?.business_connection_id;
-		if (connectionId) {
-			userId = `business:${connectionId}:${bot.userId}`;
+		const customerId = bot.update.business_message?.chat.id;
+		if (connectionId && customerId) {
+			userId = `business:${connectionId}:${customerId}`;
 			const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
 				`business_connection:${connectionId}`,
 				'json'
@@ -282,8 +283,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					let historyUserId: number | string = bot.userId;
 					if (bot.update_type === 'business_message') {
 						const connectionId = bot.update.business_message?.business_connection_id;
-						if (connectionId) {
-							historyUserId = `business:${connectionId}:${bot.userId}`;
+						const customerId = bot.update.business_message?.chat.id;
+						if (connectionId && customerId) {
+							historyUserId = `business:${connectionId}:${customerId}`;
 						}
 					}
 					const threadId =
