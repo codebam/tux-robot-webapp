@@ -1,5 +1,5 @@
 import { type RequestHandler } from '@sveltejs/kit';
-import TelegramBot, { TelegramExecutionContext, fetchTool, searchTool } from '@codebam/cf-workers-telegram-bot';
+import TelegramBot, { TelegramExecutionContext, fetchTool, wikipediaTool } from '@codebam/cf-workers-telegram-bot';
 import {
 	type Environment,
 	type Task,
@@ -10,6 +10,48 @@ import {
 	AVAILABLE_MODELS,
 	markdownToHtml
 } from '$lib/server/chatUtils';
+
+async function getBusinessOwnerData(
+	bot: TelegramExecutionContext,
+	env: Environment,
+	connectionId: string
+): Promise<{ id: number; name: string } | null> {
+	let ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
+		`business_connection:${connectionId}`,
+		'json'
+	);
+	if (!ownerData) {
+		try {
+			const response = await bot.api.getBusinessConnection(
+				bot.bot.api.toString(),
+				connectionId
+			);
+			if (response.status === 200) {
+				const json = (await response.json()) as {
+					ok: boolean;
+					result?: {
+						user?: { first_name: string; id: number };
+						user_chat_id?: number;
+					};
+				};
+				if (json.ok && json.result) {
+					const id = json.result.user?.id || json.result.user_chat_id;
+					const name = json.result.user?.first_name || 'the business owner';
+					if (id) {
+						ownerData = { id, name };
+						await env.CONVERSATION_HISTORY.put(
+							`business_connection:${connectionId}`,
+							JSON.stringify(ownerData)
+						);
+					}
+				}
+			}
+		} catch (e) {
+			console.error('Failed to fetch business connection:', e);
+		}
+	}
+	return ownerData;
+}
 
 async function chargeStars(
 	bot: TelegramExecutionContext,
@@ -27,10 +69,7 @@ async function chargeStars(
 		const customerId = bot.update.business_message?.chat.id;
 		if (connectionId && customerId) {
 			userId = `business:${connectionId}:${customerId}`;
-			const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
-				`business_connection:${connectionId}`,
-				'json'
-			);
+			const ownerData = await getBusinessOwnerData(bot, env, connectionId);
 			if (ownerData?.id) {
 				billingUserId = ownerData.id;
 			}
@@ -290,7 +329,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				await chargeStars(
 					bot,
 					env,
-					{ type: 'tool_call', prompt, tools: [fetchTool, searchTool] },
+					{ type: 'tool_call', prompt, tools: [fetchTool, wikipediaTool] },
 					historyManager,
 					ctx
 				);
@@ -560,38 +599,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						let ownerId: number | undefined;
 						const connectionId = bot.update.business_message?.business_connection_id;
 						if (connectionId) {
-							let ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
-								`business_connection:${connectionId}`,
-								'json'
-							);
-							if (!ownerData) {
-								try {
-									const response = await bot.api.getBusinessConnection(
-										bot.bot.api.toString(),
-										connectionId
-									);
-									if (response.status === 200) {
-										const json = (await response.json()) as {
-											ok: boolean;
-											result: { user: { first_name: string; id: number } };
-										};
-										if (json.ok && json.result) {
-											const name = json.result.user.first_name;
-											ownerData = { id: json.result.user.id, name };
-											await env.CONVERSATION_HISTORY.put(
-												`business_connection:${connectionId}`,
-												JSON.stringify(ownerData)
-											);
-										}
-									}
-								} catch (e) {
-									console.error('Failed to fetch business connection:', e);
-								}
-							}
-							if (ownerData?.name) {
+							const ownerData = await getBusinessOwnerData(bot, env, connectionId);
+							if (ownerData) {
 								ownerName = ownerData.name;
-							}
-							if (ownerData?.id) {
 								ownerId = ownerData.id;
 							}
 						}
