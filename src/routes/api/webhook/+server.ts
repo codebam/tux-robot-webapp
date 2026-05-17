@@ -20,12 +20,16 @@ async function getBusinessOwnerData(
 		`business_connection:${connectionId}`,
 		'json'
 	);
-	if (!ownerData) {
+	if (ownerData) {
+		console.log(`[getBusinessOwnerData] Cache HIT for connection ${connectionId}:`, JSON.stringify(ownerData));
+	} else {
+		console.log(`[getBusinessOwnerData] Cache MISS for connection ${connectionId}. Fetching from Telegram API...`);
 		try {
 			const response = await bot.api.getBusinessConnection(
 				bot.bot.api.toString(),
 				connectionId
 			);
+			console.log(`[getBusinessOwnerData] Telegram API response status: ${response.status}`);
 			if (response.status === 200) {
 				const json = (await response.json()) as {
 					ok: boolean;
@@ -34,20 +38,28 @@ async function getBusinessOwnerData(
 						user_chat_id?: number;
 					};
 				};
+				console.log(`[getBusinessOwnerData] Telegram API returned JSON:`, JSON.stringify(json));
 				if (json.ok && json.result) {
 					const id = json.result.user?.id || json.result.user_chat_id;
 					const name = json.result.user?.first_name || 'the business owner';
 					if (id) {
 						ownerData = { id, name };
+						console.log(`[getBusinessOwnerData] Successfully resolved owner: id=${id}, name=${name}. Caching in KV...`);
 						await env.CONVERSATION_HISTORY.put(
 							`business_connection:${connectionId}`,
 							JSON.stringify(ownerData)
 						);
+					} else {
+						console.error(`[getBusinessOwnerData] Failed to resolve owner ID from result:`, JSON.stringify(json.result));
 					}
+				} else {
+					console.error(`[getBusinessOwnerData] Telegram API returned ok=false or missing result:`, JSON.stringify(json));
 				}
+			} else {
+				console.error(`[getBusinessOwnerData] Telegram API call failed. Status: ${response.status}`);
 			}
 		} catch (e) {
-			console.error('Failed to fetch business connection:', e);
+			console.error('[getBusinessOwnerData] Failed to fetch business connection:', e);
 		}
 	}
 	return ownerData;
@@ -598,11 +610,15 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						let ownerName = 'the business owner';
 						let ownerId: number | undefined;
 						const connectionId = bot.update.business_message?.business_connection_id;
+						console.log(`[business_message] connectionId: ${connectionId}`);
 						if (connectionId) {
 							const ownerData = await getBusinessOwnerData(bot, env, connectionId);
 							if (ownerData) {
 								ownerName = ownerData.name;
 								ownerId = ownerData.id;
+								console.log(`[business_message] Resolved owner: id=${ownerId}, name=${ownerName}`);
+							} else {
+								console.warn(`[business_message] getBusinessOwnerData returned null for connection: ${connectionId}`);
 							}
 						}
 
@@ -612,11 +628,19 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						);
 
 						if (ownerId) {
+							console.log(`[business_message] Fetching facts for ownerId: ${ownerId}`);
 							const facts = await env.CONVERSATION_HISTORY.get(`business_facts:${String(ownerId)}`);
 							if (facts) {
+								console.log(`[business_message] Facts found for ownerId ${ownerId}:`, facts);
 								systemPrompt += `\n\nHere are some facts about yourself (${ownerName}) that you should keep in mind and use to answer accurately if relevant:\n${facts}`;
+							} else {
+								console.log(`[business_message] No facts found for ownerId ${ownerId}`);
 							}
+						} else {
+							console.log(`[business_message] Skipping facts retrieval since ownerId is undefined.`);
 						}
+
+						console.log(`[business_message] Generated systemPrompt:`, systemPrompt);
 
 						const task: Task = {
 							type: 'business_message',
