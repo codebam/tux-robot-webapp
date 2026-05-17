@@ -15,8 +15,8 @@ async function getBusinessOwnerData(
 	bot: TelegramExecutionContext,
 	env: Environment,
 	connectionId: string
-): Promise<{ id: number; name: string } | null> {
-	let ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
+): Promise<{ id: number; name: string; username?: string } | null> {
+	let ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string; username?: string }>(
 		`business_connection:${connectionId}`,
 		'json'
 	);
@@ -34,7 +34,7 @@ async function getBusinessOwnerData(
 				const json = (await response.json()) as {
 					ok: boolean;
 					result?: {
-						user?: { first_name: string; id: number };
+						user?: { first_name: string; username?: string; id: number };
 						user_chat_id?: number;
 					};
 				};
@@ -42,9 +42,10 @@ async function getBusinessOwnerData(
 				if (json.ok && json.result) {
 					const id = json.result.user?.id || json.result.user_chat_id;
 					const name = json.result.user?.first_name || 'the business owner';
+					const username = json.result.user?.username;
 					if (id) {
-						ownerData = { id, name };
-						console.log(`[getBusinessOwnerData] Successfully resolved owner: id=${id}, name=${name}. Caching in KV...`);
+						ownerData = { id, name, username };
+						console.log(`[getBusinessOwnerData] Successfully resolved owner: id=${id}, name=${name}, username=${username ?? ''}. Caching in KV...`);
 						await env.CONVERSATION_HISTORY.put(
 							`business_connection:${connectionId}`,
 							JSON.stringify(ownerData)
@@ -535,11 +536,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						const connection = bot.update.business_connection;
 						if (connection) {
 							const ownerName = connection.user.first_name;
+							const username = connection.user.username;
 							await env.CONVERSATION_HISTORY.put(
 								`business_connection:${connection.id}`,
 								JSON.stringify({
 									id: connection.user.id,
-									name: ownerName || 'the business owner'
+									name: ownerName || 'the business owner',
+									username: username
 								})
 							);
 						}
@@ -609,6 +612,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 						let ownerName = 'the business owner';
 						let ownerId: number | undefined;
+						let username: string | undefined;
 						const connectionId = bot.update.business_message?.business_connection_id;
 						console.log(`[business_message] connectionId: ${connectionId}`);
 						if (connectionId) {
@@ -616,7 +620,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							if (ownerData) {
 								ownerName = ownerData.name;
 								ownerId = ownerData.id;
-								console.log(`[business_message] Resolved owner: id=${ownerId}, name=${ownerName}`);
+								username = ownerData.username;
+								console.log(`[business_message] Resolved owner: id=${ownerId}, name=${ownerName}, username=${username ?? ''}`);
 							} else {
 								console.warn(`[business_message] getBusinessOwnerData returned null for connection: ${connectionId}`);
 							}
@@ -627,17 +632,25 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							ownerName
 						);
 
+						let facts: string | null = null;
 						if (ownerId) {
 							console.log(`[business_message] Fetching facts for ownerId: ${ownerId}`);
-							const facts = await env.CONVERSATION_HISTORY.get(`business_facts:${String(ownerId)}`);
-							if (facts) {
-								console.log(`[business_message] Facts found for ownerId ${ownerId}:`, facts);
-								systemPrompt += `\n\nHere are some facts about yourself (${ownerName}) that you should keep in mind and use to answer accurately if relevant:\n${facts}`;
-							} else {
-								console.log(`[business_message] No facts found for ownerId ${ownerId}`);
-							}
+							facts = await env.CONVERSATION_HISTORY.get(`business_facts:${String(ownerId)}`);
+						}
+						if (!facts && username) {
+							console.log(`[business_message] Fetching facts for username: ${username}`);
+							facts = await env.CONVERSATION_HISTORY.get(`business_facts:${username}`);
+						}
+						if (!facts && ownerName && ownerName !== 'the business owner') {
+							console.log(`[business_message] Fetching facts for ownerName: ${ownerName}`);
+							facts = await env.CONVERSATION_HISTORY.get(`business_facts:${ownerName}`);
+						}
+
+						if (facts) {
+							console.log(`[business_message] Facts found:`, facts);
+							systemPrompt += `\n\nHere are some facts about yourself (${ownerName}) that you should keep in mind and use to answer accurately if relevant:\n${facts}`;
 						} else {
-							console.log(`[business_message] Skipping facts retrieval since ownerId is undefined.`);
+							console.log(`[business_message] No facts found under ownerId, username, or ownerName.`);
 						}
 
 						console.log(`[business_message] Generated systemPrompt:`, systemPrompt);
