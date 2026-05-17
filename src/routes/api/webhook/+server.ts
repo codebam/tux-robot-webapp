@@ -1,5 +1,5 @@
 import { type RequestHandler } from '@sveltejs/kit';
-import TelegramBot, { TelegramExecutionContext, fetchTool } from '@codebam/cf-workers-telegram-bot';
+import TelegramBot, { TelegramExecutionContext, fetchTool, searchTool } from '@codebam/cf-workers-telegram-bot';
 import {
 	type Environment,
 	type Task,
@@ -290,7 +290,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				await chargeStars(
 					bot,
 					env,
-					{ type: 'tool_call', prompt, tools: [fetchTool] },
+					{ type: 'tool_call', prompt, tools: [fetchTool, searchTool] },
 					historyManager,
 					ctx
 				);
