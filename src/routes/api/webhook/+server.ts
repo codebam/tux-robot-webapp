@@ -525,8 +525,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							'json'
 						);
 
-						const systemPrompt = SYSTEM_PROMPTS.BUSINESS_MODE.replace(
-							'the business owner',
+						const systemPrompt = SYSTEM_PROMPTS.BUSINESS_MODE.replaceAll(
+							'{owner_name}',
 							ownerData?.name || 'the business owner'
 						);
 
