@@ -20,6 +20,7 @@ async function chargeStars(
 	amountOverride?: number
 ) {
 	let userId = bot.userId;
+	let billingUserId = bot.userId;
 
 	if (bot.update_type === 'business_message') {
 		const connectionId = bot.update.business_message?.business_connection_id;
@@ -29,12 +30,13 @@ async function chargeStars(
 				'json'
 			);
 			if (ownerData?.id) {
-				userId = ownerData.id;
+				billingUserId = ownerData.id;
 			}
 		}
 	} else if (bot.isBot) {
 		if (bot.update.message?.chat.type === 'private') {
 			userId = parseInt(bot.chatId);
+			billingUserId = userId;
 		}
 	}
 
@@ -53,11 +55,11 @@ async function chargeStars(
 	task.businessConnectionId = bot.update.business_message?.business_connection_id?.toString();
 	task.threadId =
 		bot.update.message?.message_thread_id ?? bot.update.guest_message?.message_thread_id;
-	const balanceKey = `balance:${String(userId)}`;
-	const balance = await getBalance(userId, env.CONVERSATION_HISTORY);
+	const balanceKey = `balance:${String(billingUserId)}`;
+	const balance = await getBalance(billingUserId || 0, env.CONVERSATION_HISTORY);
 
 	const modelPreference =
-		(await env.CONVERSATION_HISTORY.get<string>(`model:${String(userId)}`)) ?? 'gemma4';
+		(await env.CONVERSATION_HISTORY.get<string>(`model:${String(billingUserId)}`)) ?? 'gemma4';
 	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
 
 	if (task.type === 'tool_call' && !modelConfig.supportsTools) {
@@ -73,14 +75,20 @@ async function chargeStars(
 		await env.CONVERSATION_HISTORY.put(balanceKey, JSON.stringify(balance - amount));
 		task.telegramToken = env.SECRET_TELEGRAM_API_TOKEN;
 
-		const customPrompt = await env.CONVERSATION_HISTORY.get(`prompt:${String(userId)}`);
-		if (customPrompt) {
-			task.systemPrompt = customPrompt;
-		} else if (!task.systemPrompt) {
-			task.systemPrompt = SYSTEM_PROMPTS.TUX_ROBOT;
+		if (task.updateType === 'business_message') {
+			if (!task.systemPrompt) {
+				task.systemPrompt = SYSTEM_PROMPTS.BUSINESS_MODE;
+			}
+		} else {
+			const customPrompt = await env.CONVERSATION_HISTORY.get(`prompt:${String(userId)}`);
+			if (customPrompt) {
+				task.systemPrompt = customPrompt;
+			} else if (!task.systemPrompt) {
+				task.systemPrompt = SYSTEM_PROMPTS.TUX_ROBOT;
+			}
 		}
 
-		if (!task.history) {
+		if (!task.history && userId) {
 			task.history = await historyManager.getHistory(userId, task.threadId);
 		}
 
