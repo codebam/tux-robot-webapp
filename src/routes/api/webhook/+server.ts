@@ -216,6 +216,41 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					}
 				}
 			})
+			.command('facts', async (bot: TelegramExecutionContext) => {
+				if (bot.userId) {
+					const fullText = bot.text;
+					const commandPart = '/facts';
+					let factsValue = fullText
+						.substring(fullText.indexOf(commandPart) + commandPart.length)
+						.trim();
+
+					if (
+						factsValue === 'reset' ||
+						factsValue === '""' ||
+						factsValue === "''" ||
+						factsValue === ''
+					) {
+						await env.CONVERSATION_HISTORY.delete(`business_facts:${String(bot.userId)}`);
+						await bot.reply('Business facts cleared.');
+					} else {
+						// Remove surrounding quotes if present
+						if (
+							(factsValue.startsWith('"') && factsValue.endsWith('"')) ||
+							(factsValue.startsWith("'") && factsValue.endsWith("'"))
+						) {
+							factsValue = factsValue.substring(1, factsValue.length - 1);
+						}
+
+						if (factsValue === '') {
+							await env.CONVERSATION_HISTORY.delete(`business_facts:${String(bot.userId)}`);
+							await bot.reply('Business facts cleared.');
+						} else {
+							await env.CONVERSATION_HISTORY.put(`business_facts:${String(bot.userId)}`, factsValue);
+							await bot.reply(`Business facts updated to:\n\n${factsValue}`);
+						}
+					}
+				}
+			})
 			.command('start', async (bot: TelegramExecutionContext) => {
 				await bot.reply(
 					'Welcome! Here are my commands:\n' +
@@ -226,6 +261,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						'/ttl <1-5> - Set the TTL for bot-to-bot responses\n' +
 						'/code <prompt> - Generate code snippets\n' +
 						'/prompt <"prompt"> - Set your custom system prompt (use "" or reset to clear)\n' +
+						'/facts <"facts"> - Set facts about yourself for business mode (use "" or reset to clear)\n' +
 						'/request <prompt> - Make arbitrary API requests (uses fetch tool)\n' +
 						'<prompt> - Generate text (may use tools if supported by model)\n' +
 						'Send a voice note - Transform your bot into a voice assistant (+20 Stars)\n' +
@@ -447,9 +483,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 					case 'business_connection': {
 						const connection = bot.update.business_connection;
 						if (connection) {
-							const ownerName = [connection.user.first_name, connection.user.last_name]
-								.filter(Boolean)
-								.join(' ');
+							const ownerName = connection.user.first_name;
 							await env.CONVERSATION_HISTORY.put(
 								`business_connection:${connection.id}`,
 								JSON.stringify({
@@ -523,6 +557,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 						}
 
 						let ownerName = 'the business owner';
+						let ownerId: number | undefined;
 						const connectionId = bot.update.business_message?.business_connection_id;
 						if (connectionId) {
 							let ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
@@ -538,12 +573,10 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 									if (response.status === 200) {
 										const json = (await response.json()) as {
 											ok: boolean;
-											result: { user: { first_name: string; last_name?: string; id: number } };
+											result: { user: { first_name: string; id: number } };
 										};
 										if (json.ok && json.result) {
-											const name = [json.result.user.first_name, json.result.user.last_name]
-												.filter(Boolean)
-												.join(' ');
+											const name = json.result.user.first_name;
 											ownerData = { id: json.result.user.id, name };
 											await env.CONVERSATION_HISTORY.put(
 												`business_connection:${connectionId}`,
@@ -558,12 +591,22 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 							if (ownerData?.name) {
 								ownerName = ownerData.name;
 							}
+							if (ownerData?.id) {
+								ownerId = ownerData.id;
+							}
 						}
 
-						const systemPrompt = SYSTEM_PROMPTS.BUSINESS_MODE.replaceAll(
+						let systemPrompt = SYSTEM_PROMPTS.BUSINESS_MODE.replaceAll(
 							'{owner_name}',
 							ownerName
 						);
+
+						if (ownerId) {
+							const facts = await env.CONVERSATION_HISTORY.get(`business_facts:${String(ownerId)}`);
+							if (facts) {
+								systemPrompt += `\n\nHere are some facts about yourself (${ownerName}) that you should keep in mind and use to answer accurately if relevant:\n${facts}`;
+							}
+						}
 
 						const task: Task = {
 							type: 'business_message',
