@@ -583,3 +583,56 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 		return new Response('Error', { status: 500 });
 	}
 };
+
+export const GET: RequestHandler = async ({ request, platform }) => {
+	if (!platform) return new Response('Platform not found', { status: 500 });
+	const env = platform.env as Environment;
+
+	const token = env.SECRET_TELEGRAM_API_TOKEN?.trim();
+	if (!token) {
+		console.error('SECRET_TELEGRAM_API_TOKEN is missing from environment');
+		return new Response('Token missing', { status: 500 });
+	}
+
+	const url = new URL(request.url);
+	const command = url.searchParams.get('command');
+
+	if (command === 'set') {
+		const webhookUrl = `${url.origin}${url.pathname}`;
+		const telegramUrl = `https://api.telegram.org/bot${token}/setWebhook`;
+
+		const params = new URLSearchParams({
+			url: webhookUrl,
+			max_connections: '40',
+			allowed_updates: JSON.stringify([
+				'message',
+				'edited_message',
+				'callback_query',
+				'inline_query',
+				'guest_message',
+				'business_message',
+				'business_connection',
+				'pre_checkout_query'
+			]),
+			drop_pending_updates: 'true'
+		});
+
+		try {
+			const res = await fetch(`${telegramUrl}?${params.toString()}`);
+			const data = await res.json();
+			return new Response(JSON.stringify(data), {
+				headers: { 'Content-Type': 'application/json' },
+				status: res.status
+			});
+		} catch (e) {
+			console.error('Failed to set webhook:', e);
+			return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+				headers: { 'Content-Type': 'application/json' },
+				status: 500
+			});
+		}
+	}
+
+	return new Response('Invalid command', { status: 400 });
+};
+
