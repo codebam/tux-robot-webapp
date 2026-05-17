@@ -19,12 +19,13 @@ async function chargeStars(
 	ctx: ExecutionContext,
 	amountOverride?: number
 ) {
-	let userId = bot.userId;
+	let userId: number | string | undefined = bot.userId;
 	let billingUserId = bot.userId;
 
 	if (bot.update_type === 'business_message') {
 		const connectionId = bot.update.business_message?.business_connection_id;
 		if (connectionId) {
+			userId = `business:${connectionId}:${bot.userId}`;
 			const ownerData = await env.CONVERSATION_HISTORY.get<{ id: number; name: string }>(
 				`business_connection:${connectionId}`,
 				'json'

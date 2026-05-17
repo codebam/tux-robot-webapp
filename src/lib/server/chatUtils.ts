@@ -27,7 +27,7 @@ export interface Task {
 	guestQueryId?: string;
 	businessConnectionId?: string;
 	prompt: string;
-	userId?: number;
+	userId?: number | string;
 	senderId?: number;
 	chatId?: string;
 	threadId?: number;
