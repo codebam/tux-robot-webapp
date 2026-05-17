@@ -279,9 +279,16 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			})
 			.command('clear', async (bot: TelegramExecutionContext) => {
 				if (bot.userId) {
+					let historyUserId: number | string = bot.userId;
+					if (bot.update_type === 'business_message') {
+						const connectionId = bot.update.business_message?.business_connection_id;
+						if (connectionId) {
+							historyUserId = `business:${connectionId}:${bot.userId}`;
+						}
+					}
 					const threadId =
 						bot.update.message?.message_thread_id ?? bot.update.guest_message?.message_thread_id;
-					await historyManager.clearHistory(bot.userId, threadId);
+					await historyManager.clearHistory(historyUserId, threadId);
 					await bot.reply('History cleared');
 				}
 			})
