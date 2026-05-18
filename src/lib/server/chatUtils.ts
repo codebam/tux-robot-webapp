@@ -1,4 +1,196 @@
-export { markdownToHtml, HistoryManager, getBalance } from '@codebam/cf-workers-telegram-bot';
+import { marked } from 'marked';
+
+/** Class representing a manager for conversation history stored in KV */
+export class HistoryManager {
+	constructor(private kv: KVNamespace) {}
+
+	private getKey(userId: number | string, threadId?: number): string {
+		return threadId ? `history:${String(userId)}:${String(threadId)}` : `history:${String(userId)}`;
+	}
+
+	/**
+	 * Get the conversation history for a user
+	 * @param userId - the telegram user ID
+	 * @param threadId - optional thread ID
+	 * @returns array of messages
+	 */
+	async getHistory(
+		userId: number | string,
+		threadId?: number
+	): Promise<{ role: string; content: string }[]> {
+		if (!this.kv) {
+			return [];
+		}
+		const history = await this.kv.get<{ role: string; content: string }[]>(
+			this.getKey(userId, threadId),
+			'json'
+		);
+		return history ?? [];
+	}
+
+	/**
+	 * Add a message and its response to the history
+	 * @param userId - the telegram user ID
+	 * @param prompt - the user message
+	 * @param response - the bot response
+	 * @param threadId - optional thread ID
+	 */
+	async addMessage(userId: number | string, prompt: string, response: string, threadId?: number) {
+		if (!this.kv) {
+			return;
+		}
+		const history = await this.getHistory(userId, threadId);
+		history.push({ role: 'user', content: prompt });
+		history.push({ role: 'assistant', content: response });
+		const trimmedHistory = history.slice(-20);
+		await this.kv.put(this.getKey(userId, threadId), JSON.stringify(trimmedHistory), {
+			expirationTtl: 86400
+		});
+	}
+
+	/**
+	 * Clear the conversation history for a user
+	 * @param userId - the telegram user ID
+	 * @param threadId - optional thread ID
+	 */
+	async clearHistory(userId: number | string, threadId?: number) {
+		if (!this.kv) {
+			return;
+		}
+		await this.kv.delete(this.getKey(userId, threadId));
+	}
+}
+
+/**
+ * Get the balance for a user, initializing it if it doesn't exist
+ * @param userId - the telegram user ID | string
+ * @param env - the environment with KV
+ * @returns the user's balance
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getBalance(userId: number | string, env: any): Promise<number> {
+	const kv = env.CONVERSATION_HISTORY;
+	const balanceKey = `balance:${String(userId)}`;
+	const balance = await kv.get<number>(balanceKey, 'json');
+	if (balance === null) {
+		const defaultBalance = 200;
+		await kv.put(balanceKey, JSON.stringify(defaultBalance));
+		return defaultBalance;
+	}
+	return balance;
+}
+
+export async function markdownToHtml(s: string): Promise<string> {
+	const renderer = new marked.Renderer();
+
+	// Telegram supports: b, strong, i, em, u, ins, s, strike, del, span, tg-spoiler, a, code, pre, blockquote
+
+	renderer.heading = ({ tokens, depth }) => {
+		const text = renderer.parser.parseInline(tokens);
+		if (depth === 1) {
+			return `<b>${text}</b>\n\n`;
+		}
+		if (depth === 2) {
+			return `<b>${text}</b>\n\n`;
+		}
+		return `<b>${text}</b>\n\n`;
+	};
+
+	renderer.paragraph = ({ tokens }) => {
+		const text = renderer.parser.parseInline(tokens);
+		return `${text}\n\n`;
+	};
+
+	renderer.br = () => '\n';
+
+	renderer.list = ({ items, ordered, start }) => {
+		let result = '';
+		for (let i = 0; i < items.length; i++) {
+			const item = items[i];
+			const prefix = ordered
+				? `${start !== '' && start !== undefined ? Number(start) + i : i + 1}. `
+				: '• ';
+			result += `${prefix}${renderer.listitem(item)}\n`;
+		}
+		return result;
+	};
+
+	renderer.listitem = (item) => {
+		return renderer.parser.parse(item.tokens).trim();
+	};
+
+	renderer.strong = ({ tokens }) => `<b>${renderer.parser.parseInline(tokens)}</b>`;
+	renderer.em = ({ tokens }) => `<i>${renderer.parser.parseInline(tokens)}</i>`;
+	const escapeHtml = (text: string) =>
+		text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	renderer.codespan = ({ text }) => `<code>${escapeHtml(text)}</code>`;
+	renderer.code = ({ text, lang }) => {
+		const escapedText = escapeHtml(text);
+		if (lang) {
+			return `<pre><code class="language-${lang}">${escapedText}</code></pre>\n`;
+		}
+		return `<pre><code>${escapedText}</code></pre>\n`;
+	};
+	renderer.del = ({ tokens }) => `<s>${renderer.parser.parseInline(tokens)}</s>`;
+
+	renderer.link = ({ href, tokens }) =>
+		`<a href="${escapeHtml(href)}">${renderer.parser.parseInline(tokens)}</a>`;
+	renderer.image = ({ href, text }) => `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`;
+
+	renderer.blockquote = ({ tokens }) => {
+		return `<blockquote>${renderer.parser.parse(tokens)}</blockquote>\n`;
+	};
+
+	renderer.hr = () => `────────\n\n`;
+
+	// html tag pass-through for supported tags or escaping
+	renderer.html = ({ text }) => {
+		const allowedTags = [
+			'b',
+			'strong',
+			'i',
+			'em',
+			'u',
+			'ins',
+			's',
+			'strike',
+			'del',
+			'span',
+			'tg-spoiler',
+			'a',
+			'code',
+			'pre',
+			'blockquote'
+		];
+		const match = /^<\/?([a-z0-9-]+)(?:\s+[^>]*)?>/i.exec(text);
+		if (match) {
+			const tagName = match[1].toLowerCase();
+			if (allowedTags.includes(tagName)) {
+				return text; // Allow through
+			}
+		}
+		// Escape everything else
+		return escapeHtml(text);
+	};
+
+	renderer.text = (token) => {
+		if ('tokens' in token && token.tokens) {
+			return renderer.parser.parseInline(token.tokens);
+		}
+		// Escape standard HTML entities
+		return escapeHtml(token.text);
+	};
+
+	marked.setOptions({
+		gfm: true,
+		breaks: true
+	});
+
+	const parsed = await marked.parse(s, { renderer });
+
+	// Trim multiple newlines
+	return (parsed as string).replace(/\n{3,}/g, '\n\n').trim();
+}
 
 export interface Environment {
 	SECRET_TELEGRAM_API_TOKEN: string;

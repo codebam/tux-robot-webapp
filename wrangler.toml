@@ -16,7 +16,7 @@ bucket_name = "share"
 
 [[services]]
 binding = "AI_WORKFLOW"
-service = "ai-workflow"
+service = "tux-robot"
 
 [env.preview]
 name = "tux-robot-webapp-dev"
@@ -34,4 +34,4 @@ bucket_name = "share"
 
 [[env.preview.services]]
 binding = "AI_WORKFLOW"
-service = "ai-workflow-dev"
+service = "tux-robot-dev"
