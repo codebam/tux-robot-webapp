@@ -113,7 +113,10 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/workflow', {
 			method: 'POST',
 			body: JSON.stringify(task),
-			headers: { 'Content-Type': 'application/json' }
+			headers: {
+				'Content-Type': 'application/json',
+				'x-source': 'webapp'
+			}
 		});
 
 		if (!response.ok) {
