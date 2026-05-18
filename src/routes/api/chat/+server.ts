@@ -110,7 +110,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const updatedHeaders = { 'x-new-balance': String(newBalance) };
 
 	try {
-		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/', {
+		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/workflow', {
 			method: 'POST',
 			body: JSON.stringify(task),
 			headers: { 'Content-Type': 'application/json' }
