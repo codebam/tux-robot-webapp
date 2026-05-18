@@ -14,8 +14,6 @@ jobs:
         with:
           node-version: latest
       - run: npm ci
-        env:
-          NPM_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
       - run: npm run build
       - run: npx wrangler pages deploy .svelte-kit/cloudflare --project-name tux-robot-webapp --branch main
         env:
