@@ -269,8 +269,18 @@
 
 		{#if error}
 			<div class="error-banner">
-				<p>{error}</p>
-				<button onclick={() => (error = null)}>×</button>
+				<div class="error-content">
+					<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+						<path
+							d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+						/>
+					</svg>
+					<p>{error}</p>
+					{#if error.toLowerCase().includes('balance') || error.toLowerCase().includes('insufficient')}
+						<button class="error-action" onclick={topUp}>Top Up</button>
+					{/if}
+				</div>
+				<button class="close-error" onclick={() => (error = null)}>×</button>
 			</div>
 		{/if}
 
@@ -647,25 +657,69 @@
 	}
 
 	.error-banner {
-		background: var(--error-bg);
-		border-top: 1px solid var(--error-border);
-		color: var(--error-text);
-		padding: 0.85rem 2rem;
+		background: #fff5f5;
+		border-top: 1px solid #feb2b2;
+		color: #c53030;
+		padding: 0.85rem 1.5rem;
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
 		font-size: 0.95rem;
+		animation: slideUp 0.3s ease-out;
 	}
 
-	.error-banner button {
+	@keyframes slideUp {
+		from {
+			transform: translateY(100%);
+		}
+		to {
+			transform: translateY(0);
+		}
+	}
+
+	.error-content {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.error-content p {
+		margin: 0;
+		font-weight: 500;
+	}
+
+	.error-action {
+		background: #c53030;
+		color: white;
+		border: none;
+		padding: 0.25rem 0.75rem;
+		border-radius: 1rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		cursor: pointer;
+		margin-left: 0.5rem;
+		transition: background-color 0.2s;
+	}
+
+	.error-action:hover {
+		background: #9b2c2c;
+	}
+
+	.close-error {
 		background: none;
 		border: none;
-		color: var(--error-text);
+		color: #c53030;
 		font-size: 1.5rem;
 		cursor: pointer;
 		padding: 0 0.5rem;
 		display: flex;
 		align-items: center;
+		opacity: 0.7;
+		transition: opacity 0.2s;
+	}
+
+	.close-error:hover {
+		opacity: 1;
 	}
 
 	.spinner {
