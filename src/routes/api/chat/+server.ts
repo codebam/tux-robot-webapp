@@ -32,7 +32,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const uId = parseInt(userId);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
-	const balance = await getBalance(uId, env);
+	const balance = await getBalance(uId, env.CONVERSATION_HISTORY);
 	const commonHeaders = { 'x-new-balance': String(balance) };
 
 	// Handle / commands
