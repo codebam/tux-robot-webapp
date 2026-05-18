@@ -13,14 +13,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: latest
-          registry-url: https://npm.pkg.github.com/
-          scope: '@codebam'
-      - run: npm install @codebam/cf-workers-telegram-bot@nightly
-        env:
-          NPM_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
       - run: npm install
-        env:
-          NPM_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
       - run: npm run build
       - run: npx wrangler pages deploy .svelte-kit/cloudflare --project-name tux-robot-webapp --branch preview
         env:
