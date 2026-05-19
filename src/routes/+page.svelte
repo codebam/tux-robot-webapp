@@ -19,10 +19,10 @@
 
 	let { data }: { data: PageData } = $props();
 
-	let balance = $state<number | null>(data.balance);
-	let userId = $state<number | null>(data.userId);
+	let balance = $state<number | null>(untrack(() => data.balance));
+	let userId = $state<number | null>(untrack(() => data.userId));
 	let error = $state<string | null>(null);
-	let loading = $state(!data.userId);
+	let loading = $state(untrack(() => !data.userId));
 	let isTelegram = $state(false);
 	let initData = $state('');
 
