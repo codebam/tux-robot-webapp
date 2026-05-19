@@ -6,7 +6,10 @@ import {
 	getBalance,
 	AVAILABLE_MODELS,
 	SYSTEM_PROMPTS,
-	verifyTelegramWebAppData
+	verifyTelegramWebAppData,
+	extractText,
+	extractThinking,
+	extractReasoning
 } from '$lib/server/chatUtils';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
@@ -125,13 +128,24 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 		const contentType = response.headers.get('Content-Type');
 		if (contentType?.includes('application/json')) {
-			interface AiResponseData { response?: string; choices?: { message?: { content?: string } }[] }
-			const data = (await response.json()) as AiResponseData;
-			const content = typeof data.response === 'string' ? data.response : (data.choices?.[0]?.message?.content as string) || '';
-			if (content) {
-				await historyManager.addMessage(uId, prompt, content);
+			const data = (await response.json()) as any;
+			const content = extractText(data);
+			const thinking = extractThinking(data);
+			const reasoning = extractReasoning(data);
+
+			let finalContent = '';
+			if (thinking) {
+				finalContent += `>**Thinking**\n>${thinking.replace(/\n/g, '\n>')}\n\n`;
 			}
-			return json({ message: content }, { headers: updatedHeaders });
+			if (reasoning) {
+				finalContent += `>**Reasoning**\n>${reasoning.replace(/\n/g, '\n>')}\n\n`;
+			}
+			finalContent += content;
+
+			if (finalContent) {
+				await historyManager.addMessage(uId, prompt, finalContent);
+			}
+			return json({ message: finalContent }, { headers: updatedHeaders });
 		}
 
 		// It's a stream
@@ -143,6 +157,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 		const captureTask = (async () => {
 			let fullResponse = '';
+			let fullThinking = '';
+			let fullReasoning = '';
 			const decoder = new TextDecoder();
 			let buffer = '';
 			try {
@@ -161,15 +177,28 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 							if (dataStr === '[DONE]') continue;
 							try {
 								const data = JSON.parse(dataStr);
-								fullResponse += data.response ?? data.choices?.[0]?.delta?.content ?? '';
+								const delta = data.choices?.[0]?.delta || {};
+								fullResponse += data.response ?? delta.content ?? '';
+								fullThinking += delta.thought ?? '';
+								fullReasoning += delta.reasoning_content ?? '';
 							} catch {
 								// ignore
 							}
 						}
 					}
 				}
-				if (fullResponse) {
-					await historyManager.addMessage(uId, prompt, fullResponse);
+
+				let finalContent = '';
+				if (fullThinking) {
+					finalContent += `>**Thinking**\n>${fullThinking.replace(/\n/g, '\n>')}\n\n`;
+				}
+				if (fullReasoning) {
+					finalContent += `>**Reasoning**\n>${fullReasoning.replace(/\n/g, '\n>')}\n\n`;
+				}
+				finalContent += fullResponse;
+
+				if (finalContent) {
+					await historyManager.addMessage(uId, prompt, finalContent);
 				}
 			} catch (e) {
 				console.error('Error in stream processing:', e);

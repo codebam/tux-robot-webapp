@@ -174,7 +174,7 @@
 			const reader = response.body?.getReader();
 			if (!reader) throw new Error('No response body');
 
-			let botMessage = { role: 'bot' as const, content: '' };
+			let botMessage = { role: 'bot' as const, content: '', thinking: '', reasoning: '' };
 			messages = [...messages, botMessage];
 
 			const decoder = new TextDecoder();
@@ -192,9 +192,25 @@
 						if (dataStr === '[DONE]') break;
 						try {
 							const data = JSON.parse(dataStr);
-							const content = data.response ?? data.choices?.[0]?.delta?.content ?? '';
+							const delta = data.choices?.[0]?.delta || {};
+							const content = data.response ?? delta.content ?? '';
+							const thinking = delta.thought || '';
+							const reasoning = delta.reasoning_content || '';
+							
 							botMessage.content += content;
-							messages = [...messages.slice(0, -1), { ...botMessage }];
+							botMessage.thinking += thinking;
+							botMessage.reasoning += reasoning;
+
+							let displayContent = '';
+							if (botMessage.thinking) {
+								displayContent += `>**Thinking**\n>${botMessage.thinking.replace(/\n/g, '\n>')}\n\n`;
+							}
+							if (botMessage.reasoning) {
+								displayContent += `>**Reasoning**\n>${botMessage.reasoning.replace(/\n/g, '\n>')}\n\n`;
+							}
+							displayContent += botMessage.content;
+
+							messages = [...messages.slice(0, -1), { role: 'bot', content: displayContent }];
 							await scrollToBottom();
 						} catch {
 							// Some chunks might be incomplete, ignore parse errors
