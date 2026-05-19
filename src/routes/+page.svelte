@@ -203,12 +203,11 @@
 
 							let displayContent = '';
 							if (botMessage.thinking) {
-								displayContent += `>**Thinking**\n>${botMessage.thinking.replace(/\n/g, '\n>')}\n\n`;
+								displayContent += `>${botMessage.thinking.replace(/\n/g, '\n>')}\n\n`;
 							}
 							if (botMessage.reasoning) {
-								displayContent += `>**Reasoning**\n>${botMessage.reasoning.replace(/\n/g, '\n>')}\n\n`;
-							}
-							displayContent += botMessage.content;
+								displayContent += `>${botMessage.reasoning.replace(/\n/g, '\n>')}\n\n`;
+							}							displayContent += botMessage.content;
 
 							messages = [...messages.slice(0, -1), { role: 'bot', content: displayContent }];
 							await scrollToBottom();

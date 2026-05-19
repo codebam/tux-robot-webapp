@@ -135,10 +135,10 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 			let finalContent = '';
 			if (thinking) {
-				finalContent += `>**Thinking**\n>${thinking.replace(/\n/g, '\n>')}\n\n`;
+				finalContent += `>${thinking.replace(/\n/g, '\n>')}\n\n`;
 			}
 			if (reasoning) {
-				finalContent += `>**Reasoning**\n>${reasoning.replace(/\n/g, '\n>')}\n\n`;
+				finalContent += `>${reasoning.replace(/\n/g, '\n>')}\n\n`;
 			}
 			finalContent += content;
 
@@ -190,10 +190,10 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 				let finalContent = '';
 				if (fullThinking) {
-					finalContent += `>**Thinking**\n>${fullThinking.replace(/\n/g, '\n>')}\n\n`;
+					finalContent += `>${fullThinking.replace(/\n/g, '\n>')}\n\n`;
 				}
 				if (fullReasoning) {
-					finalContent += `>**Reasoning**\n>${fullReasoning.replace(/\n/g, '\n>')}\n\n`;
+					finalContent += `>${fullReasoning.replace(/\n/g, '\n>')}\n\n`;
 				}
 				finalContent += fullResponse;
 
