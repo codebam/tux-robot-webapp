@@ -13,7 +13,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return new Response('Platform not found', { status: 500 });
 	const env = platform.env as Environment;
 
-	const body = (await request.json()) as Record<string, unknown>;
+	const body = (await request.json()) as { prompt?: string; initData?: string };
 
 	let userId = cookies.get('userId');
 	if (!userId && body.initData) {
@@ -28,7 +28,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!userId) return json({ error: 'Unauthorized' }, { status: 401 });
 
 	const prompt = body.prompt;
-	if (!prompt) return json({ error: 'Prompt is required' }, { status: 400 });
+	if (!prompt || typeof prompt !== 'string') return json({ error: 'Prompt is required' }, { status: 400 });
 
 	const uId = parseInt(userId);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
@@ -125,8 +125,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 		const contentType = response.headers.get('Content-Type');
 		if (contentType?.includes('application/json')) {
-			const data = (await response.json()) as Record<string, unknown>;
-			const content = data.response || data.choices?.[0]?.message?.content || '';
+			interface AiResponseData { response?: string; choices?: { message?: { content?: string } }[] }
+			const data = (await response.json()) as AiResponseData;
+			const content = typeof data.response === 'string' ? data.response : (data.choices?.[0]?.message?.content as string) || '';
 			if (content) {
 				await historyManager.addMessage(uId, prompt, content);
 			}

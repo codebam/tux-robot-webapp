@@ -1,12 +1,12 @@
 <script lang="ts">
-	import { marked } from 'marked';
+	import { marked, type Token } from 'marked';
 
 	let { content = '' } = $props();
 
 	let tokens = $derived(marked.lexer(content));
 </script>
 
-{#snippet renderToken(token: Record<string, unknown>)}
+{#snippet renderToken(token: Token)}
 	{#if token.type === 'paragraph'}
 		<p>
 			{#each token.tokens || [] as subToken, i (i)}

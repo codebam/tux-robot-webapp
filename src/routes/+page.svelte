@@ -4,6 +4,19 @@
 	import favicon from '$lib/assets/favicon.png';
 	import Markdown from '$lib/Markdown.svelte';
 
+	interface ChatMessage { role: 'user' | 'bot' | 'assistant'; content: string; }
+	interface BalanceResponse {
+		error?: string;
+		balance?: number;
+		userId?: number;
+		history?: ChatMessage[];
+	}
+	interface ChatResponse {
+		error?: string;
+		type?: string;
+		message?: string;
+	}
+
 	let { data }: { data: PageData } = $props();
 
 	let balance = $state<number | null>(data.balance);
@@ -25,8 +38,7 @@
 			untrack(() => {
 				if (messages.length === 0) {
 					const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					data.history.forEach((h: any) => {
+					(data.history as ChatMessage[]).forEach((h) => {
 						if (h.role === 'user') {
 							parsedMessages.push({ role: 'user', content: h.content.trim() });
 						} else if (h.role === 'assistant' || h.role === 'bot') {
@@ -60,16 +72,16 @@
 
 			try {
 				const res = await fetch(`/api/balance?initData=${encodeURIComponent(tg.initData)}`);
-				const resData = (await res.json()) as Record<string, unknown>;
+				const resData = (await res.json()) as BalanceResponse;
 				if (resData.error) {
 					error = resData.error;
 				} else {
-					balance = resData.balance;
-					userId = resData.userId;
+					balance = resData.balance ?? null;
+					userId = resData.userId ?? null;
 
 					if (resData.history && messages.length === 0) {
 						const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
-						resData.history.forEach((h: Record<string, unknown>) => {
+						resData.history.forEach((h: ChatMessage) => {
 							if (h.role === 'user') {
 								parsedMessages.push({ role: 'user', content: h.content.trim() });
 							} else if (h.role === 'assistant' || h.role === 'bot') {
@@ -133,24 +145,24 @@
 			}
 
 			if (!response.ok) {
-				const errorData = (await response.json()) as Record<string, unknown>;
+				const errorData = (await response.json()) as ChatResponse;
 				throw new Error(errorData.error || 'Failed to send message');
 			}
 
 			const contentType = response.headers.get('Content-Type');
 			if (contentType?.includes('application/json')) {
-				const data = (await response.json()) as Record<string, unknown>;
+				const data = (await response.json()) as ChatResponse;
 				if (data.type === 'command') {
-					messages = [...messages, { role: 'bot', content: data.message }];
+					messages = [...messages, { role: 'bot', content: data.message ?? '' }];
 					if (currentPrompt.startsWith('/clear')) {
 						messages = [];
 					}
 					// Refresh balance
 					if (isTelegram && initData) {
 						const res = await fetch(`/api/balance?initData=${encodeURIComponent(initData)}`);
-						const resData = (await res.json()) as Record<string, unknown>;
+						const resData = (await res.json()) as BalanceResponse;
 						if (!resData.error) {
-							balance = resData.balance;
+							balance = resData.balance ?? null;
 						}
 					}
 					isStreaming = false;
@@ -191,8 +203,7 @@
 				}
 			}
 		} catch (e) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			error = (e as any).message;
+			error = e instanceof Error ? e.message : String(e);
 		} finally {
 			isStreaming = false;
 			await tick();
