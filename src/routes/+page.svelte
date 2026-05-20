@@ -372,7 +372,7 @@
 	main {
 		display: flex;
 		flex-direction: column;
-		height: 100vh;
+		height: 100dvh;
 		width: 100%;
 		margin: 0;
 		background: var(--chat-bg);
@@ -662,7 +662,8 @@
 	.input-area {
 		padding: 0.5rem;
 		padding-left: 1.5rem;
-		margin: 0 auto 1.5rem auto;
+		margin: 0 auto 0 auto;
+		margin-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
 		max-width: 800px;
 		width: calc(100% - 3rem);
 		border: 1px solid var(--border-color);
