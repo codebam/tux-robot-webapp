@@ -10,7 +10,8 @@ import {
 	verifyTelegramWebAppData,
 	extractText,
 	extractThinking,
-	extractReasoning
+	extractReasoning,
+	sha256
 } from '$lib/server/chatUtils';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
@@ -185,7 +186,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			body: JSON.stringify(task),
 			headers: {
 				'Content-Type': 'application/json',
-				'x-source': 'webapp'
+				'x-source': 'webapp',
+				'x-password': await sha256(env.SECRET_TELEGRAM_API_TOKEN)
 			}
 		});
 
