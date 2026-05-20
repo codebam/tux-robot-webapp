@@ -1,21 +1,26 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { verifyTelegramWebAppData } from '$lib/server/chatUtils';
 
 export const GET: RequestHandler = async ({ url, platform }) => {
 	if (!platform) return json({ error: 'Platform not found' }, { status: 500 });
 	const initData = url.searchParams.get('initData');
 	if (!initData) return json({ error: 'initData missing' }, { status: 400 });
 
-	const env = platform.env;
-	const isValid = await verifyTelegramWebAppData(initData, env.SECRET_TELEGRAM_API_TOKEN);
+	const env = platform.env as any;
+	const verifyRes = await env.AI_WORKFLOW.fetch('https://workflow.local/verify', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ authProof: initData })
+	});
 
-	if (!isValid) return json({ error: 'Invalid initData' }, { status: 401 });
+	if (!verifyRes.ok) return json({ error: 'Invalid initData' }, { status: 401 });
 
 	const params = new URLSearchParams(initData);
-	const user = JSON.parse(params.get('user') ?? '{}');
-	const userId = user.id;
+	const userStr = params.get('user');
+	const userIdVal = userStr ? JSON.parse(userStr).id : params.get('id');
 
-	if (!userId) return json({ error: 'User ID missing' }, { status: 400 });
+	if (!userIdVal) return json({ error: 'User ID missing' }, { status: 400 });
+
+	const userId = parseInt(userIdVal);
 
 	const balanceKey = `balance:${String(userId)}`;
 	const balance = await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json');

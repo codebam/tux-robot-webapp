@@ -21,16 +21,28 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const body = (await request.json()) as { prompt?: string; initData?: string };
 
 	let userId = cookies.get('userId');
-	if (!userId && body.initData) {
-		const isValid = await verifyTelegramWebAppData(body.initData, env.SECRET_TELEGRAM_API_TOKEN);
-		if (isValid) {
-			const params = new URLSearchParams(body.initData);
-			const user = JSON.parse(params.get('user') ?? '{}');
-			if (user.id) userId = String(user.id);
+	let loginProof = cookies.get('loginProof') || body.initData;
+
+	if (!userId && loginProof) {
+		const verifyRes = await env.AI_WORKFLOW.fetch('https://workflow.local/verify', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ authProof: loginProof })
+		});
+
+		if (verifyRes.ok) {
+			const params = new URLSearchParams(loginProof);
+			const userStr = params.get('user');
+			const userIdVal = userStr ? JSON.parse(userStr).id : params.get('id');
+			if (userIdVal) {
+				userId = String(userIdVal);
+				cookies.set('userId', userId, { path: '/' });
+				cookies.set('loginProof', loginProof, { path: '/' });
+			}
 		}
 	}
 
-	if (!userId) return json({ error: 'Unauthorized' }, { status: 401 });
+	if (!userId || !loginProof) return json({ error: 'Unauthorized' }, { status: 401 });
 
 	const prompt = body.prompt;
 	if (!prompt || typeof prompt !== 'string') return json({ error: 'Prompt is required' }, { status: 400 });
@@ -187,7 +199,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			headers: {
 				'Content-Type': 'application/json',
 				'x-source': 'webapp',
-				'x-password': await sha256(env.SECRET_TELEGRAM_API_TOKEN)
+				'x-telegram-auth': loginProof
 			}
 		});
 
