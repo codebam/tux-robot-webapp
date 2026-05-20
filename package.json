@@ -24,6 +24,7 @@
 		"@sveltejs/kit": "^2.60.1",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@types/node": "^25",
+		"@vite-pwa/sveltekit": "^1.1.0",
 		"@vitest/browser-playwright": "^4.1.6",
 		"eslint": "^10.4.0",
 		"eslint-config-prettier": "^10.1.8",
@@ -37,13 +38,14 @@
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.59.3",
 		"vite": "^8.0.13",
+		"vite-plugin-pwa": "^1.3.0",
 		"vitest": "^4.1.6",
 		"vitest-browser-svelte": "^2.1.1",
 		"wrangler": "^4.92.0"
 	},
 	"dependencies": {
 		"@cloudflare/ai-utils": "^1.0.1",
-		"marked": "^18.0.3",
-		"@codebam/shared": "*"
+		"@codebam/shared": "*",
+		"marked": "^18.0.3"
 	}
 }
