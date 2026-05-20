@@ -84,6 +84,71 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 					);
 				}
 			}
+			case '/prompt': {
+				const promptKey = `prompt:${userId}`;
+				if (args.length > 0) {
+					let promptValue = args.join(' ');
+					if (promptValue === 'reset' || promptValue === '""' || promptValue === "''") {
+						await env.CONVERSATION_HISTORY.delete(promptKey);
+						return json(
+							{
+								message: `System prompt reset to default:\n\n${SYSTEM_PROMPTS.TUX_ROBOT}`,
+								type: 'command'
+							},
+							{ headers: commonHeaders }
+						);
+					} else {
+						if (
+							(promptValue.startsWith('"') && promptValue.endsWith('"')) ||
+							(promptValue.startsWith("'") && promptValue.endsWith("'"))
+						) {
+							promptValue = promptValue.substring(1, promptValue.length - 1);
+						}
+						await env.CONVERSATION_HISTORY.put(promptKey, promptValue);
+						return json(
+							{ message: `System prompt updated to:\n\n${promptValue}`, type: 'command' },
+							{ headers: commonHeaders }
+						);
+					}
+				} else {
+					const currentPrompt = (await env.CONVERSATION_HISTORY.get(promptKey)) || SYSTEM_PROMPTS.TUX_ROBOT;
+					return json(
+						{ message: `Current system prompt:\n\n${currentPrompt}`, type: 'command' },
+						{ headers: commonHeaders }
+					);
+				}
+			}
+			case '/facts': {
+				const factsKey = `business_facts:${userId}`;
+				if (args.length > 0) {
+					let factsValue = args.join(' ');
+					if (factsValue === 'reset' || factsValue === '""' || factsValue === "''") {
+						await env.CONVERSATION_HISTORY.delete(factsKey);
+						return json(
+							{ message: 'Business facts cleared.', type: 'command' },
+							{ headers: commonHeaders }
+						);
+					} else {
+						if (
+							(factsValue.startsWith('"') && factsValue.endsWith('"')) ||
+							(factsValue.startsWith("'") && factsValue.endsWith("'"))
+						) {
+							factsValue = factsValue.substring(1, factsValue.length - 1);
+						}
+						await env.CONVERSATION_HISTORY.put(factsKey, factsValue);
+						return json(
+							{ message: `Business facts updated to:\n\n${factsValue}`, type: 'command' },
+							{ headers: commonHeaders }
+						);
+					}
+				} else {
+					const currentFacts = (await env.CONVERSATION_HISTORY.get(factsKey)) || 'No facts set.';
+					return json(
+						{ message: `Current business facts:\n\n${currentFacts}`, type: 'command' },
+						{ headers: commonHeaders }
+					);
+				}
+			}
 		}
 	}
 
