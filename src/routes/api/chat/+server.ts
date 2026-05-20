@@ -194,12 +194,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const updatedHeaders = { 'x-new-balance': String(newBalance) };
 
 	try {
-		const payloadString = JSON.stringify(task);
-		console.log(`[Webapp-Payload] Generated payload: ${payloadString}`);
-		
 		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/workflow', {
 			method: 'POST',
-			body: payloadString,
+			body: JSON.stringify(task),
 			headers: {
 				'Content-Type': 'application/json',
 				'x-source': 'webapp'
