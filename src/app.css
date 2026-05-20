@@ -1,91 +1,68 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Fira+Code:wght@400;500&display=swap');
 
 :root {
-	--bg-color: #f8fafc;
-	--text-color: #0f172a;
-	--main-bg: rgba(255, 255, 255, 0.7);
-	--header-bg: rgba(255, 255, 255, 0.8);
-	--border-color: rgba(226, 232, 240, 0.8);
-	--chat-bg: #f1f5f9;
-	--bot-bubble-bg: rgba(255, 255, 255, 0.9);
-	--bot-bubble-text: #1e293b;
-	--user-bubble-bg: linear-gradient(135deg, #0088cc, #006699);
-	--user-bubble-text: #ffffff;
-	--input-bg: rgba(255, 255, 255, 0.9);
-	--input-border: #cbd5e1;
+	--bg-color: #f0f4f9; /* Gemini soft gray background */
+	--text-color: #1f1f1f; /* Gemini dark gray text */
+	--main-bg: #ffffff;
+	--header-bg: #f0f4f9;
+	--border-color: #e3e3e3;
+	--chat-bg: #f0f4f9;
+	--bot-bubble-bg: #ffffff;
+	--bot-bubble-text: #1f1f1f;
+	--user-bubble-bg: #e3e3e3; /* Soft light gray for user message */
+	--user-bubble-text: #1f1f1f;
+	--input-bg: #ffffff;
+	--input-border: transparent;
 	--pill-bg: #ffffff;
-	--pill-border: #e2e8f0;
-	--error-bg: #fef2f2;
-	--error-border: #fecaca;
-	--error-text: #991b1b;
-	--code-bg: #0f172a;
-	--code-text: #f8fafc;
-	--glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
-	--glass-blur: blur(20px);
-	--primary-color: #0088cc;
-	--primary-hover: #0077b3;
+	--pill-border: #e3e3e3;
+	--error-bg: #fdeded;
+	--error-border: #f5c2c2;
+	--error-text: #5f2120;
+	--code-bg: #f7f9fb;
+	--code-text: #1f1f1f;
+	--glass-shadow: 0 1px 3px 0 rgba(0,0,0,0.05), 0 1px 2px -1px rgba(0,0,0,0.05);
+	--glass-blur: none;
+	--primary-color: #0b57d0; /* Google Signature Blue */
+	--primary-hover: #0842a0;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--bg-color: #0b0f19;
-		--text-color: #f8fafc;
-		--main-bg: rgba(15, 23, 42, 0.6);
-		--header-bg: rgba(15, 23, 42, 0.85);
-		--border-color: rgba(51, 65, 85, 0.5);
-		--chat-bg: #0b0f19;
-		--bot-bubble-bg: rgba(30, 41, 59, 0.7);
-		--bot-bubble-text: #f1f5f9;
-		--user-bubble-bg: linear-gradient(135deg, #0088cc, #006699);
-		--user-bubble-text: #ffffff;
-		--input-bg: rgba(30, 41, 59, 0.8);
-		--input-border: rgba(71, 85, 105, 0.6);
-		--pill-bg: rgba(30, 41, 59, 0.6);
-		--pill-border: rgba(71, 85, 105, 0.4);
-		--error-bg: #450a0a;
-		--error-border: #991b1b;
-		--error-text: #fecaca;
-		--code-bg: #030712;
-		--code-text: #e2e8f0;
-		--glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-		--glass-blur: blur(20px);
+		--bg-color: #0f1318; /* Gemini Dark background */
+		--text-color: #e3e3e3;
+		--main-bg: #1e1f20;
+		--header-bg: #0f1318;
+		--border-color: #2c2d30;
+		--chat-bg: #0f1318;
+		--bot-bubble-bg: #1e1f20;
+		--bot-bubble-text: #e3e3e3;
+		--user-bubble-bg: #282a2d; /* Soft dark gray user bubble */
+		--user-bubble-text: #e3e3e3;
+		--input-bg: #1e1f20;
+		--input-border: transparent;
+		--pill-bg: #1e1f20;
+		--pill-border: #2c2d30;
+		--error-bg: #2c1a1a;
+		--error-border: #662222;
+		--error-text: #f5c2c2;
+		--code-bg: #0f1318;
+		--code-text: #e3e3e3;
+		--glass-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+		--glass-blur: none;
+		--primary-color: #a8c7fa; /* Gemini Soft Blue */
+		--primary-hover: #7ca3e8;
 	}
 }
 
 body {
 	background-color: var(--bg-color);
 	color: var(--text-color);
-	font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	font-family: 'Google Sans', 'Roboto', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	margin: 0;
 	padding: 0;
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
 	overflow: hidden;
-	transition: background-color 0.3s ease;
-}
-
-/* Beautiful dynamic background elements for wow factor */
-body::before {
-	content: '';
-	position: absolute;
-	top: -10%;
-	right: -10%;
-	width: 50vw;
-	height: 50vw;
-	background: radial-gradient(circle, rgba(0, 136, 204, 0.08) 0%, transparent 70%);
-	z-index: -1;
-	pointer-events: none;
-}
-
-body::after {
-	content: '';
-	position: absolute;
-	bottom: -10%;
-	left: -10%;
-	width: 50vw;
-	height: 50vw;
-	background: radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
-	z-index: -1;
-	pointer-events: none;
+	transition: background-color 0.3s ease, color 0.3s ease;
 }
