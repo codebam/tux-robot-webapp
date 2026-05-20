@@ -69,7 +69,7 @@
 	});
 
 	onMount(async () => {
-		// Set --app-height from visualViewport for reliable mobile sizing
+		// Sync main height to actual visible viewport for reliable mobile sizing
 		function setAppHeight() {
 			const vh = window.visualViewport?.height ?? window.innerHeight;
 			document.documentElement.style.setProperty('--app-height', `${vh}px`);
@@ -386,15 +386,18 @@
 
 <style>
 	main {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: var(--app-height, 100dvh);
 		display: flex;
 		flex-direction: column;
-		height: var(--app-height, 100dvh);
-		min-height: 0;
-		width: 100%;
-		margin: 0;
+		padding-bottom: env(safe-area-inset-bottom, 0px);
 		background: var(--chat-bg);
 		box-shadow: none;
-		position: relative;
+		box-sizing: border-box;
 	}
 
 	header {
