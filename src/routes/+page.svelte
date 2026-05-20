@@ -373,6 +373,7 @@
 		display: flex;
 		flex-direction: column;
 		height: 100dvh;
+		min-height: 0;
 		width: 100%;
 		margin: 0;
 		background: var(--chat-bg);
@@ -502,6 +503,7 @@
 
 	.chat-container {
 		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
 		padding: 2rem;
 		display: flex;
