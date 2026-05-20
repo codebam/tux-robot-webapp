@@ -184,7 +184,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		modelId: modelConfig.id,
 		systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT,
 		stream: true,
-		userId: String(userId)
+		userId: String(userId),
+		authProof: loginProof
 	};
 
 	// Deduct balance
@@ -198,8 +199,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			body: JSON.stringify(task),
 			headers: {
 				'Content-Type': 'application/json',
-				'x-source': 'webapp',
-				'x-telegram-auth': loginProof
+				'x-source': 'webapp'
 			}
 		});
 
