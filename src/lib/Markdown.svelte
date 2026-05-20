@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { marked, type Token } from 'marked';
+	import CodeBlock from './CodeBlock.svelte';
 
 	let { content = '' } = $props();
 
@@ -28,7 +29,7 @@
 	{:else if token.type === 'codespan'}
 		<code>{token.text}</code>
 	{:else if token.type === 'code'}
-		<pre><code>{token.text}</code></pre>
+		<CodeBlock code={token.text} lang={token.lang} />
 	{:else if token.type === 'link'}
 		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 		<a href={token.href} title={token.title} target="_blank" rel="noopener noreferrer">

@@ -5,6 +5,7 @@ import {
 	HistoryManager,
 	getBalance,
 	AVAILABLE_MODELS,
+	DEFAULT_MODEL,
 	SYSTEM_PROMPTS,
 	verifyTelegramWebAppData,
 	extractText,
@@ -71,7 +72,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 						);
 					}
 				} else {
-					const currentModel = (await env.CONVERSATION_HISTORY.get<string>(modelKey)) ?? 'gemma4';
+					const currentModel = (await env.CONVERSATION_HISTORY.get<string>(modelKey)) ?? DEFAULT_MODEL;
 					const modelList = Object.entries(AVAILABLE_MODELS)
 						.map(([name, cfg]) => `- ${name} (${cfg.cost} Stars)`)
 						.join('\n');
@@ -153,8 +154,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	}
 
 	const modelPreference =
-		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? 'gemma4';
-	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS.gemma4;
+		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? DEFAULT_MODEL;
+	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS[DEFAULT_MODEL];
 	const amount = modelConfig.cost;
 
 	if (balance < amount) {
@@ -169,7 +170,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		history,
 		modelId: modelConfig.id,
 		systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT,
-		stream: true
+		stream: true,
+		userId: String(userId)
 	};
 
 	// Deduct balance
@@ -236,9 +238,12 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 					buffer += decoder.decode(value, { stream: true });
 					const lines = buffer.split('\n');
 					buffer = lines.pop() ?? '';
-					for (const line of lines) {
-						if (line.startsWith('data: ')) {
-							const dataStr = line.slice(6).trim();
+					for (let i = 0; i < lines.length; i++) {
+						const line = lines[i];
+						const trimmed = line.trim();
+						if (!trimmed) continue;
+						if (trimmed.startsWith('data: ')) {
+							const dataStr = trimmed.slice(6).trim();
 							if (dataStr === '[DONE]') continue;
 							try {
 								const data = JSON.parse(dataStr);
@@ -247,7 +252,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 								fullThinking += delta.thought ?? '';
 								fullReasoning += delta.reasoning_content ?? '';
 							} catch {
-								// ignore
+								const remaining = lines.slice(i).join('\n');
+								buffer = remaining + (buffer ? '\n' + buffer : '');
+								break;
 							}
 						}
 					}
