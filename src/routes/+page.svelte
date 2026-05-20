@@ -69,6 +69,16 @@
 	});
 
 	onMount(async () => {
+		// Set --app-height from visualViewport for reliable mobile sizing
+		function setAppHeight() {
+			const vh = window.visualViewport?.height ?? window.innerHeight;
+			document.documentElement.style.setProperty('--app-height', `${vh}px`);
+		}
+		setAppHeight();
+		window.visualViewport?.addEventListener('resize', setAppHeight);
+		window.visualViewport?.addEventListener('scroll', setAppHeight);
+		window.addEventListener('resize', setAppHeight);
+
 		const tg = window.Telegram?.WebApp;
 		if (tg && tg.initData) {
 			isTelegram = true;
@@ -114,6 +124,12 @@
 		} else {
 			loading = false;
 		}
+
+		return () => {
+			window.visualViewport?.removeEventListener('resize', setAppHeight);
+			window.visualViewport?.removeEventListener('scroll', setAppHeight);
+			window.removeEventListener('resize', setAppHeight);
+		};
 	});
 
 	async function scrollToBottom() {
@@ -372,7 +388,7 @@
 	main {
 		display: flex;
 		flex-direction: column;
-		height: 100dvh;
+		height: var(--app-height, 100dvh);
 		min-height: 0;
 		width: 100%;
 		margin: 0;
