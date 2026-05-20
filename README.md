@@ -1,42 +1,39 @@
-# sv
+# Telegram Web App
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+This is a Svelte 5 web application designed to interact with the [Telegram Bot](../bot). It is built with SvelteKit and optimized for deployment on Cloudflare Pages.
 
-## Creating a project
+## Features
 
-If you're seeing this, you've probably already done this step. Congrats!
+- **Svelte 5**: Built using the latest Svelte features and patterns.
+- **Telegram Auth**: Secure authentication using Telegram's Web App / Login Widget data.
+- **AI Chat Interface**: A clean UI for interacting with the AI bot.
+- **Cloudflare Pages**: High-performance hosting with SSR (Server-Side Rendering) on the edge.
+- **Markdown Support**: Rich message rendering with Markdown support.
 
-```sh
-# create a new project
-npx sv create my-app
-```
+## Development
 
-To recreate this project with the same configuration:
+1. **Install dependencies**:
+   ```sh
+   npm install
+   ```
 
-```sh
-# recreate this project
-npx sv@0.15.3 create --template minimal --types ts --add sveltekit-adapter="adapter:cloudflare+cfTarget:pages" prettier eslint vitest="usages:unit,component" --no-install webapp
-```
+2. **Start the development server**:
+   ```sh
+   npm run dev
+   ```
 
-## Developing
+3. **Configure bindings**:
+   Update `wrangler.toml` with the necessary KV and AI bindings to match your production environment.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+## Deployment
 
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
+To build and deploy the application to Cloudflare Pages:
 
 ```sh
 npm run build
+npx wrangler pages deploy .svelte-kit/cloudflare
 ```
 
-You can preview the production build with `npm run preview`.
+## License
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Apache-2.0
