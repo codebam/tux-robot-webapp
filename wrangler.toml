@@ -1,4 +1,4 @@
-name = "tux-robot-webapp"
+name = "telegram-webapp"
 compatibility_flags = [ "nodejs_compat" ]
 compatibility_date = "2025-06-04"
 pages_build_output_dir = ".svelte-kit/cloudflare"
@@ -19,7 +19,7 @@ binding = "AI_WORKFLOW"
 service = "tux-robot"
 
 [env.preview]
-name = "tux-robot-webapp-dev"
+name = "telegram-webapp-dev"
 
 [env.preview.ai]
 binding = "AI"
