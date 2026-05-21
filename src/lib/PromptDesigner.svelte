@@ -431,7 +431,7 @@ Current Budget: 50,000 USD`
 							{statusMessage.text}
 						</div>
 					{/if}
-					<button class="save-btn" onclick={savePrompt} disabled={saving}>
+					<button class="save-btn" onclick={() => savePrompt(false)} disabled={saving}>
 						{#if saving}
 							Saving to KV...
 						{:else}
@@ -478,6 +478,11 @@ Current Budget: 50,000 USD`
 </div>
 
 <style>
+	.designer-wrapper,
+	.designer-wrapper * {
+		box-sizing: border-box;
+	}
+
 	.designer-wrapper {
 		display: flex;
 		flex-direction: column;
@@ -485,7 +490,6 @@ Current Budget: 50,000 USD`
 		padding: 1.5rem;
 		height: 100%;
 		overflow-y: auto;
-		box-sizing: border-box;
 	}
 
 	.designer-header {
@@ -954,5 +958,68 @@ Current Budget: 50,000 USD`
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
+	}
+
+	@media (max-width: 600px) {
+		.designer-wrapper {
+			padding: 0.75rem;
+			gap: 1rem;
+		}
+
+		.editor-pane {
+			padding: 1rem;
+			gap: 1rem;
+		}
+
+		.sidebar-card {
+			padding: 1rem;
+		}
+
+		.preset-save-section {
+			flex-direction: column;
+			gap: 0.6rem;
+		}
+
+		.preset-name-input {
+			width: 100%;
+		}
+
+		.add-preset-btn {
+			width: 100%;
+			text-align: center;
+			white-space: normal;
+		}
+
+		.preset-label {
+			width: 100%;
+			margin-bottom: 0.2rem;
+		}
+
+		.action-bar {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.75rem;
+		}
+
+		.save-btn {
+			width: 100%;
+			margin-left: 0;
+			text-align: center;
+		}
+
+		.status-toast {
+			width: 100%;
+			text-align: center;
+		}
+
+		.header-title-row {
+			flex-direction: row;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		.designer-header h2 {
+			font-size: 1.2rem;
+		}
 	}
 </style>
