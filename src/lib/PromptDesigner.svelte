@@ -90,6 +90,28 @@ Current Budget: 50,000 USD`
 	// Variables dictionary value state
 	let variableValues = $state<Record<string, string>>({});
 
+	let isInitialLoad = true;
+	let debounceTimer: ReturnType<typeof setTimeout>;
+
+	$effect(() => {
+		// Establish Svelte 5 reactive dependencies
+		const promptVal = systemPrompt;
+		const factsVal = businessFacts;
+		const varsVal = { ...variableValues };
+
+		if (loading) return;
+
+		if (isInitialLoad) {
+			isInitialLoad = false;
+			return;
+		}
+
+		clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			savePrompt(true);
+		}, 1000);
+	});
+
 	// Derived full preview of the prompt with placeholders replaced
 	let promptPreview = $derived.by(() => {
 		let preview = systemPrompt;
@@ -193,7 +215,7 @@ Current Budget: 50,000 USD`
 			});
 			if (res.ok) {
 				const data = (await res.json()) as any;
-				systemPrompt = data.template || data.prompt || '';
+				systemPrompt = data.template || data.prompt || DEFAULT_PROMPT_PRESETS.tuxrobot.prompt;
 				businessFacts = data.facts || '';
 				variableValues = data.variables || {};
 				customPromptPresets = data.userPromptPresets || [];
@@ -269,7 +291,16 @@ Current Budget: 50,000 USD`
 
 <div class="designer-wrapper">
 	<header class="designer-header">
-		<h2>System Prompt & Facts Designer</h2>
+		<div class="header-title-row">
+			<h2>System Prompt & Facts Designer</h2>
+			{#if loading}
+				<span class="sync-badge loading">Loading...</span>
+			{:else if saving}
+				<span class="sync-badge saving">Saving draft...</span>
+			{:else}
+				<span class="sync-badge synced">Draft saved to KV</span>
+			{/if}
+		</div>
 		<p class="designer-sub">Customize AI personas, configure localized business context facts, and manage custom presets.</p>
 	</header>
 
@@ -461,6 +492,50 @@ Current Budget: 50,000 USD`
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+	}
+
+	.header-title-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.sync-badge {
+		font-size: 0.75rem;
+		font-weight: 600;
+		padding: 0.25rem 0.75rem;
+		border-radius: 1rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		transition: all 0.3s ease;
+	}
+
+	.sync-badge.loading {
+		background: rgba(59, 130, 246, 0.1);
+		color: #3b82f6;
+		border: 1px solid rgba(59, 130, 246, 0.2);
+	}
+
+	.sync-badge.saving {
+		background: rgba(245, 158, 11, 0.1);
+		color: #f59e0b;
+		border: 1px solid rgba(245, 158, 11, 0.2);
+		animation: pulse 1.5s infinite ease-in-out;
+	}
+
+	.sync-badge.synced {
+		background: rgba(16, 185, 129, 0.1);
+		color: #10b981;
+		border: 1px solid rgba(16, 185, 129, 0.2);
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 0.8; }
+		50% { opacity: 1; transform: scale(1.02); }
 	}
 
 	.designer-header h2 {
