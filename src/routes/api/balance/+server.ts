@@ -23,7 +23,8 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 	const userId = parseInt(userIdVal);
 
 	const balanceKey = `balance:${String(userId)}`;
-	const balance = await env.CONVERSATION_HISTORY.get<number>(balanceKey, 'json');
+	const balanceVal = await env.CONVERSATION_HISTORY.get(balanceKey, 'json');
+	const balance = balanceVal !== null ? (balanceVal as number) : null;
 
 	const historyManager = await import('../../../lib/server/chatUtils').then(
 		(m) => new m.HistoryManager(env.CONVERSATION_HISTORY)

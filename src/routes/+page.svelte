@@ -9,6 +9,8 @@
 	import type { PageData } from './$types';
 	import favicon from '$lib/assets/favicon.png';
 	import Markdown from '$lib/Markdown.svelte';
+	import Dashboard from '$lib/Dashboard.svelte';
+	import PromptDesigner from '$lib/PromptDesigner.svelte';
 
 	interface ChatMessage { role: 'user' | 'bot' | 'assistant'; content: string; }
 	interface BalanceResponse {
@@ -31,6 +33,7 @@
 	let loading = $state(untrack(() => !data.userId));
 	let isTelegram = $state(false);
 	let initData = $state('');
+	let activeTab = $state<'chat' | 'dashboard' | 'designer'>('chat');
 
 	let messages = $state<{ role: 'user' | 'bot'; content: string }[]>([]);
 	let prompt = $state('');
@@ -68,7 +71,7 @@
 		}
 	});
 
-	onMount(async () => {
+	onMount(() => {
 		// Sync main height to actual visible viewport for reliable mobile sizing
 		function setAppHeight() {
 			const vh = window.visualViewport?.height ?? window.innerHeight;
@@ -86,41 +89,43 @@
 			tg.ready();
 			tg.expand();
 
-			try {
-				const res = await fetch(`/api/balance?initData=${encodeURIComponent(tg.initData)}`);
-				const resData = (await res.json()) as BalanceResponse;
-				if (resData.error) {
-					error = resData.error;
-				} else {
-					balance = resData.balance ?? null;
-					userId = resData.userId ?? null;
+			(async () => {
+				try {
+					const res = await fetch(`/api/balance?initData=${encodeURIComponent(tg.initData)}`);
+					const resData = (await res.json()) as BalanceResponse;
+					if (resData.error) {
+						error = resData.error;
+					} else {
+						balance = resData.balance ?? null;
+						userId = resData.userId ?? null;
 
-					if (resData.history && messages.length === 0) {
-						const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
-						resData.history.forEach((h: ChatMessage) => {
-							if (h.role === 'user') {
-								parsedMessages.push({ role: 'user', content: h.content.trim() });
-							} else if (h.role === 'assistant' || h.role === 'bot') {
-								parsedMessages.push({ role: 'bot', content: h.content.trim() });
-							} else {
-								const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
-								if (match) {
-									parsedMessages.push({ role: 'user', content: match[1].trim() });
-									parsedMessages.push({ role: 'bot', content: match[2].trim() });
-								} else {
+						if (resData.history && messages.length === 0) {
+							const parsedMessages: { role: 'user' | 'bot'; content: string }[] = [];
+							resData.history.forEach((h: ChatMessage) => {
+								if (h.role === 'user') {
+									parsedMessages.push({ role: 'user', content: h.content.trim() });
+								} else if (h.role === 'assistant' || h.role === 'bot') {
 									parsedMessages.push({ role: 'bot', content: h.content.trim() });
+								} else {
+									const match = h.content.match(/\[INST\] (.*) \[\/INST\] \n (.*)/s);
+									if (match) {
+										parsedMessages.push({ role: 'user', content: match[1].trim() });
+										parsedMessages.push({ role: 'bot', content: match[2].trim() });
+									} else {
+										parsedMessages.push({ role: 'bot', content: h.content.trim() });
+									}
 								}
-							}
-						});
-						messages = parsedMessages;
-						scrollToBottom();
+							});
+							messages = parsedMessages;
+							scrollToBottom();
+						}
 					}
+				} catch {
+					error = 'Failed to fetch balance';
+				} finally {
+					loading = false;
 				}
-			} catch {
-				error = 'Failed to fetch balance';
-			} finally {
-				loading = false;
-			}
+			})();
 		} else {
 			loading = false;
 		}
@@ -292,71 +297,89 @@
 			<p>Loading your conversation...</p>
 		</div>
 	{:else if userId !== null}
-		<div class="chat-container" bind:this={chatContainer}>
-			{#if messages.length === 0}
-				<div class="welcome-message">
-					<h2>Welcome to TuxRobot!</h2>
-					<p>Start a conversation by typing a message below.</p>
-				</div>
-			{/if}
-			{#each messages as message, i (i)}
-				<div class="message {message.role}">
-					<div class="bubble">
-						{#if message.role === 'bot'}
-							<Markdown content={message.content} />
-						{:else}
-							{message.content}
-						{/if}
-					</div>
-				</div>
-			{/each}
-			{#if isStreaming && messages[messages.length - 1]?.role === 'user'}
-				<div class="message bot">
-					<div class="bubble typing">
-						<span class="dot"></span>
-						<span class="dot"></span>
-						<span class="dot"></span>
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		{#if error}
-			<div class="error-banner">
-				<div class="error-content">
-					<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-						<path
-							d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
-						/>
-					</svg>
-					<p>{error}</p>
-					{#if error.toLowerCase().includes('balance') || error.toLowerCase().includes('insufficient')}
-						<button class="error-action" onclick={topUp}>Top Up</button>
-					{/if}
-				</div>
-				<button class="close-error" onclick={() => (error = null)}>×</button>
-			</div>
-		{/if}
-
-		<div class="input-area">
-			<textarea
-				bind:this={textarea}
-				bind:value={prompt}
-				placeholder="Type a message..."
-				onkeydown={handleKeydown}
-				disabled={isStreaming}
-				rows="1"
-			></textarea>
-			<button class="send-btn" onclick={sendMessage} disabled={isStreaming || !prompt.trim()}>
-				{#if isStreaming}
-					<div class="spinner"></div>
-				{:else}
-					<svg viewBox="0 0 24 24" width="24" height="24">
-						<path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-					</svg>
-				{/if}
+		<div class="navigation-tabs">
+			<button class="nav-tab-btn" class:active={activeTab === 'chat'} onclick={() => activeTab = 'chat'}>
+				Chat
+			</button>
+			<button class="nav-tab-btn" class:active={activeTab === 'dashboard'} onclick={() => activeTab = 'dashboard'}>
+				Sandbox Console
+			</button>
+			<button class="nav-tab-btn" class:active={activeTab === 'designer'} onclick={() => activeTab = 'designer'}>
+				Prompt Designer
 			</button>
 		</div>
+
+		{#if activeTab === 'chat'}
+			<div class="chat-container" bind:this={chatContainer}>
+				{#if messages.length === 0}
+					<div class="welcome-message">
+						<h2>Welcome to TuxRobot!</h2>
+						<p>Start a conversation by typing a message below.</p>
+					</div>
+				{/if}
+				{#each messages as message, i (i)}
+					<div class="message {message.role}">
+						<div class="bubble">
+							{#if message.role === 'bot'}
+								<Markdown content={message.content} />
+							{:else}
+								{message.content}
+							{/if}
+						</div>
+					</div>
+				{/each}
+				{#if isStreaming && messages[messages.length - 1]?.role === 'user'}
+					<div class="message bot">
+						<div class="bubble typing">
+							<span class="dot"></span>
+							<span class="dot"></span>
+							<span class="dot"></span>
+						</div>
+					</div>
+				{/if}
+			</div>
+
+			{#if error}
+				<div class="error-banner">
+					<div class="error-content">
+						<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+							<path
+								d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+							/>
+						</svg>
+						<p>{error}</p>
+						{#if error.toLowerCase().includes('balance') || error.toLowerCase().includes('insufficient')}
+							<button class="error-action" onclick={topUp}>Top Up</button>
+						{/if}
+					</div>
+					<button class="close-error" onclick={() => (error = null)}>×</button>
+				</div>
+			{/if}
+
+			<div class="input-area">
+				<textarea
+					bind:this={textarea}
+					bind:value={prompt}
+					placeholder="Type a message..."
+					onkeydown={handleKeydown}
+					disabled={isStreaming}
+					rows="1"
+				></textarea>
+				<button class="send-btn" onclick={sendMessage} disabled={isStreaming || !prompt.trim()}>
+					{#if isStreaming}
+						<div class="spinner"></div>
+					{:else}
+						<svg viewBox="0 0 24 24" width="24" height="24">
+							<path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+						</svg>
+					{/if}
+				</button>
+			</div>
+		{:else if activeTab === 'dashboard'}
+			<Dashboard {userId} {initData} bind:balance {messages} />
+		{:else if activeTab === 'designer'}
+			<PromptDesigner {userId} {initData} />
+		{/if}
 	{:else}
 		<div class="centered">
 			<div class="hero">
@@ -817,5 +840,53 @@
 		border-radius: 50%;
 		animation: spin 1s linear infinite;
 		margin-bottom: 1.5rem;
+	}
+
+	.navigation-tabs {
+		display: flex;
+		background: var(--pill-bg);
+		border-bottom: 1px solid var(--border-color);
+		padding: 0.5rem 1.5rem;
+		gap: 0.5rem;
+		z-index: 9;
+		flex-shrink: 0;
+	}
+
+	.nav-tab-btn {
+		background: transparent;
+		border: 1px solid transparent;
+		color: var(--text-color);
+		opacity: 0.65;
+		padding: 0.5rem 1.1rem;
+		border-radius: 1.5rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.nav-tab-btn:hover {
+		opacity: 0.9;
+		background: rgba(0, 0, 0, 0.03);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.nav-tab-btn:hover {
+			background: rgba(255, 255, 255, 0.05);
+		}
+	}
+
+	.nav-tab-btn.active {
+		opacity: 1;
+		color: var(--primary-color);
+		background: rgba(11, 87, 208, 0.08);
+		border-color: rgba(11, 87, 208, 0.15);
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.nav-tab-btn.active {
+			background: rgba(168, 199, 250, 0.12);
+			border-color: rgba(168, 199, 250, 0.2);
+		}
 	}
 </style>
