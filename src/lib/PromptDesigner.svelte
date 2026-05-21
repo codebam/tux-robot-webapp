@@ -17,6 +17,10 @@
 
 	// Standard System Prompt Presets
 	const DEFAULT_PROMPT_PRESETS = {
+		tuxrobot: {
+			name: 'TuxRobot',
+			prompt: `You are a friendly assistant named TuxRobot. You have access to an HTTP fetch tool, a web search tool, and document tools. If a user asks you to get data from an API, look up a profile, or visit a website, you MUST execute the fetch tool yourself to get the data. You can perform web searches using the \`tavily_search\` tool. If the user asks about an uploaded document, a file, a PDF, or a markdown file, you MUST use the \`search_telegram_file\` tool to search its contents; do NOT use \`tavily_search\` or write code. If a user asks a follow-up question about a document they previously uploaded, use the tool again if needed. When calling tools, use the EXACT name provided (e.g., \`search_telegram_file\`); do NOT add any prefixes like "functions.". If the user replies with only a single word, sticker, or emoji, respond with no more than one short paragraph. Always keep replies below 4096 characters. Only use formatting that will be supported on Telegram. DO NOT use LaTeX formatting or math equations (like \\( ... \\) or \\[ ... \\]); always use standard plain text or simple markdown formatting as LaTeX does not render on Telegram.`
+		},
 		engineer: {
 			name: 'Software Engineer',
 			prompt: `You are an expert Software Engineer. You write clean, performant, and well-documented code in {{programming_language}}.
@@ -287,6 +291,9 @@ Current Budget: 50,000 USD`
 
 					<div class="presets-row inline-presets">
 						<span class="preset-label">Prompt Templates:</span>
+						<button class="preset-btn btn-tux" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.tuxrobot.prompt)}>
+							<span class="btn-bullet"></span> TuxRobot
+						</button>
 						<button class="preset-btn btn-eng" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.engineer.prompt)}>
 							<span class="btn-bullet"></span> Software Engineer
 						</button>
@@ -519,6 +526,7 @@ Current Budget: 50,000 USD`
 		border-radius: 50%;
 	}
 
+	.btn-tux .btn-bullet { background-color: #3b82f6; }
 	.btn-eng .btn-bullet { background-color: var(--primary-color); }
 	.btn-writer .btn-bullet { background-color: #ef4444; }
 	.btn-biz .btn-bullet { background-color: #10b981; }

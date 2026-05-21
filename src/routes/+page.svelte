@@ -309,7 +309,7 @@
 			</button>
 		</div>
 
-		{#if activeTab === 'chat'}
+		<div class="tab-content chat-tab" class:hidden={activeTab !== 'chat'}>
 			<div class="chat-container" bind:this={chatContainer}>
 				{#if messages.length === 0}
 					<div class="welcome-message">
@@ -375,11 +375,15 @@
 					{/if}
 				</button>
 			</div>
-		{:else if activeTab === 'dashboard'}
+		</div>
+
+		<div class="tab-content dashboard-tab" class:hidden={activeTab !== 'dashboard'}>
 			<Dashboard {userId} {initData} bind:balance {messages} />
-		{:else if activeTab === 'designer'}
+		</div>
+
+		<div class="tab-content designer-tab" class:hidden={activeTab !== 'designer'}>
 			<PromptDesigner {userId} {initData} />
-		{/if}
+		</div>
 	{:else}
 		<div class="centered">
 			<div class="hero">
@@ -888,5 +892,16 @@
 			background: rgba(168, 199, 250, 0.12);
 			border-color: rgba(168, 199, 250, 0.2);
 		}
+	}
+
+	.tab-content {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+	}
+
+	.hidden {
+		display: none !important;
 	}
 </style>
