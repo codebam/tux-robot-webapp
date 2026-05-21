@@ -136,14 +136,14 @@ Current Budget: 50,000 USD`
 		];
 
 		newPromptPresetName = '';
-		statusMessage = { text: `Prompt preset "${name}" added to list. Click "Save Configuration" to persist!`, type: 'success' };
+		savePrompt(true);
 	}
 
 	// Delete custom prompt preset
 	function deleteCustomPromptPreset(index: number) {
 		const name = customPromptPresets[index].name;
 		customPromptPresets = customPromptPresets.filter((_, i) => i !== index);
-		statusMessage = { text: `Prompt preset "${name}" removed. Click "Save Configuration" to persist!`, type: 'success' };
+		savePrompt(true);
 	}
 
 	// Add custom facts preset
@@ -167,14 +167,14 @@ Current Budget: 50,000 USD`
 		];
 
 		newFactsPresetName = '';
-		statusMessage = { text: `Facts preset "${name}" added to list. Click "Save Configuration" to persist!`, type: 'success' };
+		savePrompt(true);
 	}
 
 	// Delete custom facts preset
 	function deleteCustomFactsPreset(index: number) {
 		const name = customFactsPresets[index].name;
 		customFactsPresets = customFactsPresets.filter((_, i) => i !== index);
-		statusMessage = { text: `Facts preset "${name}" removed. Click "Save Configuration" to persist!`, type: 'success' };
+		savePrompt(true);
 	}
 
 	async function loadPrompt() {
@@ -213,9 +213,11 @@ Current Budget: 50,000 USD`
 		}
 	}
 
-	async function savePrompt() {
+	async function savePrompt(isAutoSave = false) {
 		if (!userId || !initData) return;
-		saving = true;
+		if (!isAutoSave) {
+			saving = true;
+		}
 		statusMessage = null;
 		try {
 			const res = await fetch('/api/prompt', {
@@ -227,14 +229,18 @@ Current Budget: 50,000 USD`
 				body: JSON.stringify({
 					prompt: promptPreview,
 					template: systemPrompt,
-					variables: variableValues,
+					variables: $state.snapshot(variableValues),
 					facts: businessFacts,
-					userPromptPresets: customPromptPresets,
-					userFactsPresets: customFactsPresets
+					userPromptPresets: $state.snapshot(customPromptPresets),
+					userFactsPresets: $state.snapshot(customFactsPresets)
 				})
 			});
 			if (res.ok) {
-				statusMessage = { text: 'Configuration and presets persisted successfully!', type: 'success' };
+				if (!isAutoSave) {
+					statusMessage = { text: 'Configuration and presets persisted successfully!', type: 'success' };
+				} else {
+					statusMessage = { text: 'Preset list auto-saved to cloud KV!', type: 'success' };
+				}
 				// Auto dismiss success toast after 3.5 seconds
 				setTimeout(() => {
 					if (statusMessage?.type === 'success') {
