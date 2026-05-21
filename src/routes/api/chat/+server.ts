@@ -177,12 +177,20 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const history = await historyManager.getHistory(uId);
 
+	const customPrompt = await env.CONVERSATION_HISTORY.get(`prompt:${String(userId)}`);
+	let systemPrompt = customPrompt || SYSTEM_PROMPTS.TUX_ROBOT;
+
+	const facts = await env.CONVERSATION_HISTORY.get(`business_facts:${String(userId)}`);
+	if (facts) {
+		systemPrompt += `\n\nHere are some facts about you:\n${facts}`;
+	}
+
 	const task: Task = {
 		type: modelConfig.supportsTools ? 'tool_call' : 'message',
 		prompt,
 		history,
 		modelId: modelConfig.id,
-		systemPrompt: SYSTEM_PROMPTS.TUX_ROBOT,
+		systemPrompt,
 		stream: true,
 		userId: String(userId)
 	};

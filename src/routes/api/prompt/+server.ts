@@ -25,9 +25,40 @@ export const GET: RequestHandler = async ({ url, platform, request }) => {
 
 	const userId = parseInt(userIdVal);
 	const prompt = await env.CONVERSATION_HISTORY.get(`prompt:${String(userId)}`);
+	let template = await env.CONVERSATION_HISTORY.get(`prompt_template:${String(userId)}`);
+	let variablesStr = await env.CONVERSATION_HISTORY.get(`prompt_variables:${String(userId)}`);
 	const facts = await env.CONVERSATION_HISTORY.get(`business_facts:${String(userId)}`);
+	const userPresetsStr = await env.CONVERSATION_HISTORY.get(`user_presets:${String(userId)}`);
 
-	return json({ prompt: prompt || '', facts: facts || '' });
+	if (!template && prompt) {
+		template = prompt;
+	}
+
+	let variables = {};
+	if (variablesStr) {
+		try {
+			variables = JSON.parse(variablesStr);
+		} catch (e) {
+			console.error('Failed to parse variables:', e);
+		}
+	}
+
+	let userPresets = [];
+	if (userPresetsStr) {
+		try {
+			userPresets = JSON.parse(userPresetsStr);
+		} catch (e) {
+			console.error('Failed to parse user presets:', e);
+		}
+	}
+
+	return json({
+		prompt: prompt || '',
+		template: template || '',
+		variables,
+		facts: facts || '',
+		userPresets
+	});
 };
 
 export const POST: RequestHandler = async ({ request, platform }) => {
@@ -54,13 +85,28 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	if (!userIdVal) return json({ error: 'User ID missing' }, { status: 400 });
 
 	const userId = parseInt(userIdVal);
-	const { prompt, facts } = await request.json() as { prompt?: string; facts?: string };
+	const { prompt, template, variables, facts, userPresets } = await request.json() as {
+		prompt?: string;
+		template?: string;
+		variables?: Record<string, string>;
+		facts?: string;
+		userPresets?: any[];
+	};
 
 	if (prompt !== undefined) {
 		await env.CONVERSATION_HISTORY.put(`prompt:${String(userId)}`, prompt);
 	}
+	if (template !== undefined) {
+		await env.CONVERSATION_HISTORY.put(`prompt_template:${String(userId)}`, template);
+	}
+	if (variables !== undefined) {
+		await env.CONVERSATION_HISTORY.put(`prompt_variables:${String(userId)}`, JSON.stringify(variables));
+	}
 	if (facts !== undefined) {
 		await env.CONVERSATION_HISTORY.put(`business_facts:${String(userId)}`, facts);
+	}
+	if (userPresets !== undefined) {
+		await env.CONVERSATION_HISTORY.put(`user_presets:${String(userId)}`, JSON.stringify(userPresets));
 	}
 
 	return json({ success: true });

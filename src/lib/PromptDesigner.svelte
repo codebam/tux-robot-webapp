@@ -15,7 +15,7 @@
 	let saving = $state(false);
 	let statusMessage = $state<{ text: string; type: 'success' | 'error' } | null>(null);
 
-	// Template Presets
+	// Standard Template Presets
 	const PRESETS = {
 		engineer: {
 			name: 'Software Engineer Mode',
@@ -56,6 +56,10 @@ Current Budget: 50,000 USD`
 		}
 	};
 
+	// Custom presets list state
+	let customPresets = $state<Array<{ name: string; prompt: string; facts: string }>>([]);
+	let newPresetName = $state('');
+
 	// Parse placeholders dynamically using a Svelte 5 derived state
 	let placeholders = $derived.by(() => {
 		const matches = systemPrompt.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
@@ -77,19 +81,51 @@ Current Budget: 50,000 USD`
 	});
 
 	// Select preset handler
-	function selectPreset(key: keyof typeof PRESETS) {
-		const preset = PRESETS[key];
-		systemPrompt = preset.prompt;
-		businessFacts = preset.facts;
+	function selectPreset(promptText: string, defaultFacts: string = '') {
+		systemPrompt = promptText;
 		
-		// Retain any existing values and initialize new ones
-		const matches = preset.prompt.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
+		// Only load default facts if the user's business facts are currently empty
+		if (!businessFacts.trim()) {
+			businessFacts = defaultFacts;
+		}
+		
+		// Retain any existing placeholder values and initialize new ones
+		const matches = promptText.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
 		const keys = Array.from(new Set(matches.map((m) => m.slice(2, -2))));
 		const newVals: Record<string, string> = {};
 		for (const k of keys) {
 			newVals[k] = variableValues[k] || '';
 		}
 		variableValues = newVals;
+	}
+
+	// Add custom preset
+	function addCustomPreset() {
+		const name = newPresetName.trim();
+		if (!name) {
+			statusMessage = { text: 'Please enter a preset name.', type: 'error' };
+			return;
+		}
+		if (customPresets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+			statusMessage = { text: 'A preset with this name already exists.', type: 'error' };
+			return;
+		}
+
+		customPresets.push({
+			name: name,
+			prompt: systemPrompt,
+			facts: businessFacts
+		});
+
+		newPresetName = '';
+		statusMessage = { text: `Preset "${name}" created. Click "Save Configuration" to persist!`, type: 'success' };
+	}
+
+	// Delete custom preset
+	function deleteCustomPreset(index: number) {
+		const name = customPresets[index].name;
+		customPresets.splice(index, 1);
+		statusMessage = { text: `Preset "${name}" removed. Click "Save Configuration" to persist!`, type: 'success' };
 	}
 
 	async function loadPrompt() {
@@ -104,14 +140,16 @@ Current Budget: 50,000 USD`
 			});
 			if (res.ok) {
 				const data = (await res.json()) as any;
-				systemPrompt = data.prompt || '';
+				systemPrompt = data.template || data.prompt || '';
 				businessFacts = data.facts || '';
+				variableValues = data.variables || {};
+				customPresets = data.userPresets || [];
 				
 				// Warm up placeholding inputs
 				const matches = systemPrompt.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
 				const keys = Array.from(new Set(matches.map((m) => m.slice(2, -2))));
 				for (const k of keys) {
-					if (!variableValues[k]) {
+					if (variableValues[k] === undefined) {
 						variableValues[k] = '';
 					}
 				}
@@ -137,12 +175,15 @@ Current Budget: 50,000 USD`
 					'x-telegram-auth': initData
 				},
 				body: JSON.stringify({
-					prompt: systemPrompt,
-					facts: businessFacts
+					prompt: promptPreview,
+					template: systemPrompt,
+					variables: variableValues,
+					facts: businessFacts,
+					userPresets: customPresets
 				})
 			});
 			if (res.ok) {
-				statusMessage = { text: 'Prompt templates & facts persisted to KV successfully!', type: 'success' };
+				statusMessage = { text: 'Configuration and presets persisted successfully!', type: 'success' };
 				// Auto dismiss success toast after 3.5 seconds
 				setTimeout(() => {
 					if (statusMessage?.type === 'success') {
@@ -173,15 +214,27 @@ Current Budget: 50,000 USD`
 		
 		<div class="presets-row">
 			<span class="preset-label">Templates:</span>
-			<button class="preset-btn btn-eng" onclick={() => selectPreset('engineer')}>
+			<button class="preset-btn btn-eng" onclick={() => selectPreset(PRESETS.engineer.prompt, PRESETS.engineer.facts)}>
 				<span class="btn-bullet"></span> Software Engineer
 			</button>
-			<button class="preset-btn btn-writer" onclick={() => selectPreset('writer')}>
+			<button class="preset-btn btn-writer" onclick={() => selectPreset(PRESETS.writer.prompt, PRESETS.writer.facts)}>
 				<span class="btn-bullet"></span> Creative Writer
 			</button>
-			<button class="preset-btn btn-biz" onclick={() => selectPreset('business')}>
+			<button class="preset-btn btn-biz" onclick={() => selectPreset(PRESETS.business.prompt, PRESETS.business.facts)}>
 				<span class="btn-bullet"></span> Business Advisor
 			</button>
+
+			<!-- Custom Presets -->
+			{#each customPresets as preset, index}
+				<div class="preset-custom-wrapper">
+					<button class="preset-btn btn-custom" onclick={() => selectPreset(preset.prompt, preset.facts)}>
+						<span class="btn-bullet"></span> {preset.name}
+					</button>
+					<button class="delete-preset-btn" onclick={() => deleteCustomPreset(index)} title="Delete preset">
+						&times;
+					</button>
+				</div>
+			{/each}
 		</div>
 	</header>
 
@@ -216,6 +269,19 @@ Current Budget: 50,000 USD`
 						placeholder="E.g., Sandbox runtime: Cloudflare Workers..."
 						rows="5"
 					></textarea>
+				</div>
+
+				<!-- Custom Preset Creator -->
+				<div class="preset-save-section">
+					<input
+						type="text"
+						bind:value={newPresetName}
+						placeholder="Preset name (e.g., Python Expert)"
+						class="preset-name-input"
+					/>
+					<button class="add-preset-btn" onclick={addCustomPreset}>
+						Save current as Preset
+					</button>
 				</div>
 
 				<!-- Save Action Bar -->
@@ -350,6 +416,55 @@ Current Budget: 50,000 USD`
 	.btn-writer .btn-bullet { background-color: #ef4444; }
 	.btn-biz .btn-bullet { background-color: #10b981; }
 
+	/* Custom preset styles */
+	.preset-custom-wrapper {
+		display: flex;
+		align-items: center;
+		background: var(--bot-bubble-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 2rem;
+		padding: 0 0.5rem 0 0;
+		box-shadow: var(--glass-shadow);
+		transition: all 0.2s ease;
+	}
+
+	.preset-custom-wrapper:hover {
+		transform: translateY(-1px);
+		border-color: var(--primary-color);
+	}
+
+	.preset-custom-wrapper .preset-btn {
+		background: none;
+		border: none;
+		box-shadow: none;
+		padding-right: 0.5rem;
+	}
+
+	.delete-preset-btn {
+		background: none;
+		border: none;
+		color: #ef4444;
+		font-size: 1.2rem;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		line-height: 1;
+		padding: 0;
+		opacity: 0.6;
+		transition: opacity 0.2s ease;
+	}
+
+	.delete-preset-btn:hover {
+		opacity: 1;
+	}
+
+	.btn-custom .btn-bullet {
+		background-color: var(--primary-color);
+	}
+
 	/* Body Layout split pane */
 	.designer-body {
 		display: grid;
@@ -413,6 +528,49 @@ Current Budget: 50,000 USD`
 
 	.field-group textarea:focus {
 		border-color: var(--primary-color);
+	}
+
+	/* Preset Saver styles */
+	.preset-save-section {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 0.5rem;
+		padding-top: 1.25rem;
+		border-top: 1px dashed var(--border-color);
+	}
+
+	.preset-name-input {
+		flex-grow: 1;
+		background: var(--chat-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.5rem;
+		padding: 0.55rem 0.85rem;
+		color: var(--text-color);
+		font-size: 0.85rem;
+		outline: none;
+		transition: border-color 0.2s ease;
+	}
+
+	.preset-name-input:focus {
+		border-color: var(--primary-color);
+	}
+
+	.add-preset-btn {
+		background-color: var(--chat-bg);
+		color: var(--text-color);
+		border: 1px solid var(--border-color);
+		border-radius: 0.5rem;
+		padding: 0.55rem 1.25rem;
+		font-weight: 600;
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.add-preset-btn:hover {
+		border-color: var(--primary-color);
+		background-color: var(--bot-bubble-bg);
 	}
 
 	.action-bar {
