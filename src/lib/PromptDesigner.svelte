@@ -15,40 +15,53 @@
 	let saving = $state(false);
 	let statusMessage = $state<{ text: string; type: 'success' | 'error' } | null>(null);
 
-	// Standard Template Presets
-	const PRESETS = {
+	// Standard System Prompt Presets
+	const DEFAULT_PROMPT_PRESETS = {
 		engineer: {
-			name: 'Software Engineer Mode',
+			name: 'Software Engineer',
 			prompt: `You are an expert Software Engineer. You write clean, performant, and well-documented code in {{programming_language}}.
 
 Focus Area: {{focus_area}}
 Style: Token-dense, markdown formatted.
 Preferred Frameworks: {{preferred_frameworks}}
 
-Always execute unit testing inside the sandbox before presenting results to verify correctness.`,
+Always execute unit testing inside the sandbox before presenting results to verify correctness.`
+		},
+		writer: {
+			name: 'Creative Writer',
+			prompt: `You are a talented Creative Writer. Write engaging stories, essays, and poetry with a {{tone}} tone.
+
+Target Audience: {{target_audience}}
+Core Themes: {{core_themes}}
+Style Guide: {{narrative_style}}`
+		},
+		business: {
+			name: 'Business Advisor',
+			prompt: `You are a seasoned Business Advisor. Help the user optimize operations for {{company_name}} in the {{industry}} industry.
+
+Primary Goal: {{business_goal}}
+Advice Style: {{advice_style}}
+Priority Targets: {{target_demographics}}`
+		}
+	};
+
+	// Standard Business Facts Presets
+	const DEFAULT_FACTS_PRESETS = {
+		tech_stack: {
+			name: 'Cloudflare Stack',
 			facts: `Platform: Cloudflare Workers
 Runtime: workerd
 Database: Cloudflare D1 & KV
 Sandbox Container: docker.io/cloudflare/sandbox:0.10.1-python`
 		},
-		writer: {
-			name: 'Creative Writer Mode',
-			prompt: `You are a talented Creative Writer. Write engaging stories, essays, and poetry with a {{tone}} tone.
-
-Target Audience: {{target_audience}}
-Core Themes: {{core_themes}}
-Style Guide: {{narrative_style}}`,
+		cyberpunk: {
+			name: 'Cyberpunk Lore',
 			facts: `Genre: Speculative Fiction / Cyberpunk
 Protagonist Name: Tux
 Companion: Rust (Durable Object companion)`
 		},
-		business: {
-			name: 'Business Advisor Mode',
-			prompt: `You are a seasoned Business Advisor. Help the user optimize operations for {{company_name}} in the {{industry}} industry.
-
-Primary Goal: {{business_goal}}
-Advice Style: {{advice_style}}
-Priority Targets: {{target_demographics}}`,
+		enterprise: {
+			name: 'Acme Corp Profile',
 			facts: `Company Name: Acme Corp
 Team Size: 12 engineers
 Target Market: Enterprise B2B SaaS
@@ -57,8 +70,11 @@ Current Budget: 50,000 USD`
 	};
 
 	// Custom presets list state
-	let customPresets = $state<Array<{ name: string; prompt: string; facts: string }>>([]);
-	let newPresetName = $state('');
+	let customPromptPresets = $state<Array<{ name: string; prompt: string }>>([]);
+	let customFactsPresets = $state<Array<{ name: string; facts: string }>>([]);
+	
+	let newPromptPresetName = $state('');
+	let newFactsPresetName = $state('');
 
 	// Parse placeholders dynamically using a Svelte 5 derived state
 	let placeholders = $derived.by(() => {
@@ -80,14 +96,9 @@ Current Budget: 50,000 USD`
 		return preview;
 	});
 
-	// Select preset handler
-	function selectPreset(promptText: string, defaultFacts: string = '') {
+	// Select prompt preset handler
+	function selectPromptPreset(promptText: string) {
 		systemPrompt = promptText;
-		
-		// Only load default facts if the user's business facts are currently empty
-		if (!businessFacts.trim()) {
-			businessFacts = defaultFacts;
-		}
 		
 		// Retain any existing placeholder values and initialize new ones
 		const matches = promptText.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
@@ -99,33 +110,71 @@ Current Budget: 50,000 USD`
 		variableValues = newVals;
 	}
 
-	// Add custom preset
-	function addCustomPreset() {
-		const name = newPresetName.trim();
-		if (!name) {
-			statusMessage = { text: 'Please enter a preset name.', type: 'error' };
-			return;
-		}
-		if (customPresets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-			statusMessage = { text: 'A preset with this name already exists.', type: 'error' };
-			return;
-		}
-
-		customPresets.push({
-			name: name,
-			prompt: systemPrompt,
-			facts: businessFacts
-		});
-
-		newPresetName = '';
-		statusMessage = { text: `Preset "${name}" created. Click "Save Configuration" to persist!`, type: 'success' };
+	// Select facts preset handler
+	function selectFactsPreset(factsText: string) {
+		businessFacts = factsText;
 	}
 
-	// Delete custom preset
-	function deleteCustomPreset(index: number) {
-		const name = customPresets[index].name;
-		customPresets.splice(index, 1);
-		statusMessage = { text: `Preset "${name}" removed. Click "Save Configuration" to persist!`, type: 'success' };
+	// Add custom prompt preset
+	function addCustomPromptPreset() {
+		const name = newPromptPresetName.trim();
+		if (!name) {
+			statusMessage = { text: 'Please enter a prompt preset name.', type: 'error' };
+			return;
+		}
+		if (customPromptPresets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+			statusMessage = { text: 'A prompt preset with this name already exists.', type: 'error' };
+			return;
+		}
+
+		customPromptPresets = [
+			...customPromptPresets,
+			{
+				name: name,
+				prompt: systemPrompt
+			}
+		];
+
+		newPromptPresetName = '';
+		statusMessage = { text: `Prompt preset "${name}" added to list. Click "Save Configuration" to persist!`, type: 'success' };
+	}
+
+	// Delete custom prompt preset
+	function deleteCustomPromptPreset(index: number) {
+		const name = customPromptPresets[index].name;
+		customPromptPresets = customPromptPresets.filter((_, i) => i !== index);
+		statusMessage = { text: `Prompt preset "${name}" removed. Click "Save Configuration" to persist!`, type: 'success' };
+	}
+
+	// Add custom facts preset
+	function addCustomFactsPreset() {
+		const name = newFactsPresetName.trim();
+		if (!name) {
+			statusMessage = { text: 'Please enter a facts preset name.', type: 'error' };
+			return;
+		}
+		if (customFactsPresets.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+			statusMessage = { text: 'A facts preset with this name already exists.', type: 'error' };
+			return;
+		}
+
+		customFactsPresets = [
+			...customFactsPresets,
+			{
+				name: name,
+				facts: businessFacts
+			}
+		];
+
+		newFactsPresetName = '';
+		statusMessage = { text: `Facts preset "${name}" added to list. Click "Save Configuration" to persist!`, type: 'success' };
+	}
+
+	// Delete custom facts preset
+	function deleteCustomFactsPreset(index: number) {
+		const name = customFactsPresets[index].name;
+		customFactsPresets = customFactsPresets.filter((_, i) => i !== index);
+		statusMessage = { text: `Facts preset "${name}" removed. Click "Save Configuration" to persist!`, type: 'success' };
 	}
 
 	async function loadPrompt() {
@@ -143,7 +192,8 @@ Current Budget: 50,000 USD`
 				systemPrompt = data.template || data.prompt || '';
 				businessFacts = data.facts || '';
 				variableValues = data.variables || {};
-				customPresets = data.userPresets || [];
+				customPromptPresets = data.userPromptPresets || [];
+				customFactsPresets = data.userFactsPresets || [];
 				
 				// Warm up placeholding inputs
 				const matches = systemPrompt.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
@@ -179,7 +229,8 @@ Current Budget: 50,000 USD`
 					template: systemPrompt,
 					variables: variableValues,
 					facts: businessFacts,
-					userPresets: customPresets
+					userPromptPresets: customPromptPresets,
+					userFactsPresets: customFactsPresets
 				})
 			});
 			if (res.ok) {
@@ -207,35 +258,9 @@ Current Budget: 50,000 USD`
 </script>
 
 <div class="designer-wrapper">
-	<!-- Top Preset Selection Buttons -->
 	<header class="designer-header">
 		<h2>System Prompt & Facts Designer</h2>
-		<p class="designer-sub">Select template presets, customize placeholders, and save to Cloudflare KV</p>
-		
-		<div class="presets-row">
-			<span class="preset-label">Templates:</span>
-			<button class="preset-btn btn-eng" onclick={() => selectPreset(PRESETS.engineer.prompt, PRESETS.engineer.facts)}>
-				<span class="btn-bullet"></span> Software Engineer
-			</button>
-			<button class="preset-btn btn-writer" onclick={() => selectPreset(PRESETS.writer.prompt, PRESETS.writer.facts)}>
-				<span class="btn-bullet"></span> Creative Writer
-			</button>
-			<button class="preset-btn btn-biz" onclick={() => selectPreset(PRESETS.business.prompt, PRESETS.business.facts)}>
-				<span class="btn-bullet"></span> Business Advisor
-			</button>
-
-			<!-- Custom Presets -->
-			{#each customPresets as preset, index}
-				<div class="preset-custom-wrapper">
-					<button class="preset-btn btn-custom" onclick={() => selectPreset(preset.prompt, preset.facts)}>
-						<span class="btn-bullet"></span> {preset.name}
-					</button>
-					<button class="delete-preset-btn" onclick={() => deleteCustomPreset(index)} title="Delete preset">
-						&times;
-					</button>
-				</div>
-			{/each}
-		</div>
+		<p class="designer-sub">Customize AI personas, configure localized business context facts, and manage custom presets.</p>
 	</header>
 
 	{#if loading}
@@ -249,39 +274,110 @@ Current Budget: 50,000 USD`
 			<div class="editor-pane">
 				<!-- System Prompt -->
 				<div class="field-group">
-					<label for="sysPrompt">System Prompt Template</label>
-					<span class="field-sub">Define core persona instructions. Use <code>{"{{variable}}"}</code> blocks.</span>
+					<div class="field-header">
+						<label for="sysPrompt">System Prompt Persona Template</label>
+						<span class="field-sub">Define core behavioral rules. Use double braces like <code>{"{{variable}}"}</code> for placeholders.</span>
+					</div>
+
+					<div class="presets-row inline-presets">
+						<span class="preset-label">Prompt Templates:</span>
+						<button class="preset-btn btn-eng" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.engineer.prompt)}>
+							<span class="btn-bullet"></span> Software Engineer
+						</button>
+						<button class="preset-btn btn-writer" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.writer.prompt)}>
+							<span class="btn-bullet"></span> Creative Writer
+						</button>
+						<button class="preset-btn btn-biz" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.business.prompt)}>
+							<span class="btn-bullet"></span> Business Advisor
+						</button>
+
+						<!-- Custom Prompt Presets -->
+						{#each customPromptPresets as preset, index}
+							<div class="preset-custom-wrapper">
+								<button class="preset-btn btn-custom" onclick={() => selectPromptPreset(preset.prompt)}>
+									<span class="btn-bullet"></span> {preset.name}
+								</button>
+								<button class="delete-preset-btn" onclick={() => deleteCustomPromptPreset(index)} title="Delete custom prompt preset">
+									&times;
+								</button>
+							</div>
+						{/each}
+					</div>
+
 					<textarea
 						id="sysPrompt"
 						bind:value={systemPrompt}
 						placeholder="E.g., You are a helper who codes in {'{{programming_language}}'}..."
 						rows="8"
 					></textarea>
+
+					<!-- Custom Prompt Preset Creator -->
+					<div class="preset-save-section inline-save">
+						<input
+							type="text"
+							bind:value={newPromptPresetName}
+							placeholder="Prompt preset name (e.g., Python Expert)"
+							class="preset-name-input"
+						/>
+						<button class="add-preset-btn" onclick={addCustomPromptPreset}>
+							Save current Prompt as Preset
+						</button>
+					</div>
 				</div>
+
+				<div class="section-divider"></div>
 
 				<!-- Business Facts -->
 				<div class="field-group">
-					<label for="bizFacts">Custom Business Facts</label>
-					<span class="field-sub">Inject context knowledge & sandbox specific parameters.</span>
+					<div class="field-header">
+						<label for="bizFacts">Custom Business Facts</label>
+						<span class="field-sub">Define core facts, databases, operating schedules, or context limits.</span>
+					</div>
+
+					<div class="presets-row inline-presets">
+						<span class="preset-label">Facts Presets:</span>
+						<button class="preset-btn btn-eng" onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.tech_stack.facts)}>
+							<span class="btn-bullet"></span> Cloudflare Stack
+						</button>
+						<button class="preset-btn btn-writer" onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.cyberpunk.facts)}>
+							<span class="btn-bullet"></span> Cyberpunk Lore
+						</button>
+						<button class="preset-btn btn-biz" onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.enterprise.facts)}>
+							<span class="btn-bullet"></span> Acme Corp Profile
+						</button>
+
+						<!-- Custom Facts Presets -->
+						{#each customFactsPresets as preset, index}
+							<div class="preset-custom-wrapper">
+								<button class="preset-btn btn-custom" onclick={() => selectFactsPreset(preset.facts)}>
+									<span class="btn-bullet"></span> {preset.name}
+								</button>
+								<button class="delete-preset-btn" onclick={() => deleteCustomFactsPreset(index)} title="Delete custom facts preset">
+									&times;
+								</button>
+							</div>
+						{/each}
+					</div>
+
 					<textarea
 						id="bizFacts"
 						bind:value={businessFacts}
 						placeholder="E.g., Sandbox runtime: Cloudflare Workers..."
 						rows="5"
 					></textarea>
-				</div>
 
-				<!-- Custom Preset Creator -->
-				<div class="preset-save-section">
-					<input
-						type="text"
-						bind:value={newPresetName}
-						placeholder="Preset name (e.g., Python Expert)"
-						class="preset-name-input"
-					/>
-					<button class="add-preset-btn" onclick={addCustomPreset}>
-						Save current as Preset
-					</button>
+					<!-- Custom Facts Preset Creator -->
+					<div class="preset-save-section inline-save">
+						<input
+							type="text"
+							bind:value={newFactsPresetName}
+							placeholder="Facts preset name (e.g., Cloudflare D1)"
+							class="preset-name-input"
+						/>
+						<button class="add-preset-btn" onclick={addCustomFactsPreset}>
+							Save current Facts as Preset
+						</button>
+					</div>
 				</div>
 
 				<!-- Save Action Bar -->
@@ -377,8 +473,13 @@ Current Budget: 50,000 USD`
 		margin-top: 0.5rem;
 	}
 
+	.inline-presets {
+		margin-top: 0.15rem;
+		margin-bottom: 0.5rem;
+	}
+
 	.preset-label {
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		opacity: 0.5;
@@ -390,13 +491,13 @@ Current Budget: 50,000 USD`
 		border: 1px solid var(--border-color);
 		color: var(--text-color);
 		border-radius: 2rem;
-		padding: 0.45rem 1.1rem;
-		font-size: 0.8rem;
+		padding: 0.4rem 1rem;
+		font-size: 0.75rem;
 		font-weight: 600;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.4rem;
 		box-shadow: var(--glass-shadow);
 		transition: all 0.2s ease;
 	}
@@ -444,13 +545,13 @@ Current Budget: 50,000 USD`
 		background: none;
 		border: none;
 		color: #ef4444;
-		font-size: 1.2rem;
+		font-size: 1.1rem;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 20px;
-		height: 20px;
+		width: 18px;
+		height: 18px;
 		line-height: 1;
 		padding: 0;
 		opacity: 0.6;
@@ -463,6 +564,25 @@ Current Budget: 50,000 USD`
 
 	.btn-custom .btn-bullet {
 		background-color: var(--primary-color);
+	}
+
+	.inline-save {
+		border-top: none !important;
+		padding-top: 0 !important;
+		margin-top: 0.5rem;
+	}
+
+	.section-divider {
+		height: 1px;
+		background: linear-gradient(to right, var(--border-color), transparent);
+		margin: 1.25rem 0;
+	}
+
+	.field-header {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		margin-bottom: 0.25rem;
 	}
 
 	/* Body Layout split pane */
