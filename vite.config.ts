@@ -46,7 +46,11 @@ export default defineConfig({
 					name: 'client',
 					browser: {
 						enabled: true,
-						provider: playwright(),
+						provider: playwright({
+							launchOptions: {
+								executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH
+							}
+						}),
 						instances: [{ browser: 'chromium', headless: true }]
 					},
 					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
