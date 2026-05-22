@@ -11,6 +11,7 @@
 	import Markdown from '$lib/Markdown.svelte';
 	import Dashboard from '$lib/Dashboard.svelte';
 	import PromptDesigner from '$lib/PromptDesigner.svelte';
+	import VoiceVisualizer from '$lib/VoiceVisualizer.svelte';
 
 	interface ChatMessage { role: 'user' | 'bot' | 'assistant'; content: string; }
 	interface BalanceResponse {
@@ -515,6 +516,18 @@
 					<button class="close-error" onclick={() => (error = null)}>×</button>
 				</div>
 			{/if}
+
+			<div class="voice-orb-container">
+				<VoiceVisualizer
+					{userId}
+					{initData}
+					bind:messages
+					bind:balance
+					bind:error
+					bind:isStreaming
+					onMessageAdded={scrollToBottom}
+				/>
+			</div>
 
 			<div class="input-area">
 				<input
@@ -1178,5 +1191,19 @@
 		border-radius: 50%;
 		border-top-color: var(--primary-color);
 		animation: spin 0.8s linear infinite;
+	}
+	.voice-orb-container {
+		position: absolute;
+		bottom: 85px;
+		right: 24px;
+		z-index: 50;
+	}
+	@media (max-width: 600px) {
+		.voice-orb-container {
+			bottom: 95px;
+			right: 12px;
+			transform: scale(0.85);
+			transform-origin: bottom right;
+		}
 	}
 </style>

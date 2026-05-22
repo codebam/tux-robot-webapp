@@ -98,6 +98,144 @@ Current Budget: 50,000 USD`
 	let testMessages = $state<{ role: 'user' | 'bot'; content: string }[]>([]);
 	let isTestingChat = $state(false);
 
+	// Arena state
+	let activeTesterTab = $state<'single' | 'arena'>('single');
+	let syncWithEditor = $state(true);
+
+	let arenaVariations = $state<Array<{ name: string; modelKey: string; systemPrompt: string }>>([
+		{ name: 'Variation 1', modelKey: 'glm-4.7-flash', systemPrompt: '' },
+		{ name: 'Variation 2', modelKey: 'gemma4', systemPrompt: '' },
+		{ name: 'Variation 3', modelKey: 'llama-3.2-vision', systemPrompt: '' }
+	]);
+
+	let arenaResults = $state<Array<{
+		name: string;
+		modelKey: string;
+		response: string;
+		latency: number;
+		charLength: number;
+		cost: number;
+		success: boolean;
+	}>>([]);
+
+	let isTestingArena = $state(false);
+	let diffBaseIndex = $state(0);
+
+	const ARENA_AVAILABLE_MODELS = [
+		{ key: 'gemma4', name: 'Gemma 4 (8⭐)' },
+		{ key: 'google/gemini-3-flash', name: 'Gemini 3 Flash (25⭐)' },
+		{ key: 'google/gemini-3.1-flash-lite', name: 'Gemini 3.1 Lite (12⭐)' },
+		{ key: 'google/gemini-3.1-pro', name: 'Gemini 3.1 Pro (150⭐)' },
+		{ key: 'llama-3.2-vision', name: 'Llama 3.2 Vision (8⭐)' },
+		{ key: 'kimi-k2.6', name: 'Kimi K2.6 (45⭐)' },
+		{ key: 'glm-4.7-flash', name: 'GLM 4.7 Flash (5⭐)' },
+		{ key: 'deepseek-r1-32b', name: 'DeepSeek R1 32b (80⭐)' },
+		{ key: 'nemotron-3', name: 'Nemotron 3 (20⭐)' }
+	];
+
+	// Synchronize prompt with all variations if syncWithEditor is enabled
+	$effect(() => {
+		if (syncWithEditor) {
+			const currentPreview = promptPreview;
+			for (const v of arenaVariations) {
+				v.systemPrompt = currentPreview;
+			}
+		}
+	});
+
+	function diffWords(oldStr: string, newStr: string) {
+		if (!oldStr) return [{ type: 'added' as const, text: newStr }];
+		if (!newStr) return [{ type: 'removed' as const, text: oldStr }];
+
+		const oldWords = oldStr.split(/(\s+)/).filter(Boolean);
+		const newWords = newStr.split(/(\s+)/).filter(Boolean);
+
+		const dp: number[][] = Array(oldWords.length + 1)
+			.fill(null)
+			.map(() => Array(newWords.length + 1).fill(0));
+
+		for (let i = 1; i <= oldWords.length; i++) {
+			for (let j = 1; j <= newWords.length; j++) {
+				if (oldWords[i - 1] === newWords[j - 1]) {
+					dp[i][j] = dp[i - 1][j - 1] + 1;
+				} else {
+					dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+				}
+			}
+		}
+
+		const result: Array<{ type: 'added' | 'removed' | 'common'; text: string }> = [];
+		let i = oldWords.length;
+		let j = newWords.length;
+
+		while (i > 0 || j > 0) {
+			if (i > 0 && j > 0 && oldWords[i - 1] === newWords[j - 1]) {
+				result.unshift({ type: 'common', text: oldWords[i - 1] });
+				i--;
+				j--;
+			} else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+				result.unshift({ type: 'added', text: newWords[j - 1] });
+				j--;
+			} else {
+				result.unshift({ type: 'removed', text: oldWords[i - 1] });
+				i--;
+			}
+		}
+
+		return result;
+	}
+
+	async function runArenaTest() {
+		if (!testInput.trim() || isTestingArena) return;
+		const query = testInput.trim();
+		isTestingArena = true;
+		arenaResults = [];
+
+		try {
+			await savePrompt(true);
+
+			const bodyPayload = {
+				prompt: query,
+				initData: initData,
+				variations: arenaVariations.map((v) => ({
+					name: v.name,
+					systemPrompt: v.systemPrompt || promptPreview,
+					modelKey: v.modelKey
+				}))
+			};
+
+			const response = await fetch('/api/arena', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(bodyPayload)
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json() as any;
+				throw new Error(errorData.error || 'Failed to execute arena variations.');
+			}
+
+			const data = await response.json() as any;
+			arenaResults = data.results || [];
+			
+			if (data.newBalance !== undefined) {
+				window.dispatchEvent(new CustomEvent('balanceUpdated', { detail: { balance: data.newBalance } }));
+			}
+		} catch (e: any) {
+			arenaResults = arenaVariations.map((v) => ({
+				name: v.name,
+				modelKey: v.modelKey,
+				response: `⚠️ Arena Error: ${e.message || String(e)}`,
+				latency: 0,
+				charLength: 0,
+				cost: 0,
+				success: false
+			}));
+		} finally {
+			isTestingArena = false;
+		}
+	}
+
 	function handleTestingKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter') {
 			e.preventDefault();
@@ -399,7 +537,7 @@ Current Budget: 50,000 USD`
 			<p>Retrieving configuration keys...</p>
 		</div>
 	{:else}
-		<div class="designer-body">
+		<div class="designer-body" class:arena-active={activeTesterTab === 'arena'}>
 			<!-- Config Panel -->
 			<div class="editor-pane">
 				<!-- System Prompt -->
@@ -563,51 +701,216 @@ Current Budget: 50,000 USD`
 				</div>
 
 				<!-- Sandbox Testing Playground -->
-				<div class="sidebar-card testing-card">
-					<h4>Prompt Sandbox Tester</h4>
-					<p class="empty-vars" style="margin-bottom: 0.75rem;">Test your expanded system prompt with dynamic variable placeholders in real-time.</p>
-					
-					<div class="testing-chat-window">
-						<div class="testing-chat-messages">
-							{#if testMessages.length === 0}
-								<div class="testing-empty-chat">
-									<span>No test messages. Send a message to run a sandbox trace!</span>
-								</div>
-							{:else}
-								{#each testMessages as msg}
-									<div class="testing-msg {msg.role}">
-										<div class="testing-bubble">
-											{msg.content}
-										</div>
-									</div>
-								{/each}
-								{#if isTestingChat}
-									<div class="testing-msg bot">
-										<div class="testing-bubble typing-dots">
-											<span class="dot"></span>
-											<span class="dot"></span>
-											<span class="dot"></span>
-										</div>
-									</div>
-								{/if}
-							{/if}
-						</div>
-
-						<div class="testing-input-row">
-							<input
-								type="text"
-								bind:value={testInput}
-								placeholder="Enter user query..."
-								onkeydown={handleTestingKeydown}
-								disabled={isTestingChat}
-							/>
-							<button onclick={runTestChat} disabled={isTestingChat || !testInput.trim()}>
-								Run
+				<div class="sidebar-card testing-card" class:arena-card-wide={activeTesterTab === 'arena'}>
+					<div class="testing-header-row">
+						<h4>Sandbox Playground</h4>
+						<div class="tab-toggle-group">
+							<button 
+								class="tab-toggle-btn" 
+								class:active={activeTesterTab === 'single'} 
+								onclick={() => activeTesterTab = 'single'}
+							>
+								Single Sandbox
+							</button>
+							<button 
+								class="tab-toggle-btn" 
+								class:active={activeTesterTab === 'arena'} 
+								onclick={() => activeTesterTab = 'arena'}
+							>
+								Split Arena
 							</button>
 						</div>
 					</div>
-					{#if testMessages.length > 0}
-						<button class="clear-testing-btn" onclick={() => testMessages = []} style="margin-top: 0.5rem;">Clear Test Chat</button>
+
+					{#if activeTesterTab === 'single'}
+						<p class="empty-vars" style="margin-bottom: 0.75rem;">Test your expanded system prompt with dynamic variable placeholders in real-time.</p>
+						
+						<div class="testing-chat-window">
+							<div class="testing-chat-messages">
+								{#if testMessages.length === 0}
+									<div class="testing-empty-chat">
+										<span>No test messages. Send a message to run a sandbox trace!</span>
+									</div>
+								{:else}
+									{#each testMessages as msg}
+										<div class="testing-msg {msg.role}">
+											<div class="testing-bubble">
+												{msg.content}
+											</div>
+										</div>
+									{/each}
+									{#if isTestingChat}
+										<div class="testing-msg bot">
+											<div class="testing-bubble typing-dots">
+												<span class="dot"></span>
+												<span class="dot"></span>
+												<span class="dot"></span>
+											</div>
+										</div>
+									{/if}
+								{/if}
+							</div>
+
+							<div class="testing-input-row">
+								<input
+									type="text"
+									bind:value={testInput}
+									placeholder="Enter user query..."
+									onkeydown={handleTestingKeydown}
+									disabled={isTestingChat}
+								/>
+								<button onclick={runTestChat} disabled={isTestingChat || !testInput.trim()}>
+									Run
+								</button>
+							</div>
+						</div>
+						{#if testMessages.length > 0}
+							<button class="clear-testing-btn" onclick={() => testMessages = []} style="margin-top: 0.5rem;">Clear Test Chat</button>
+						{/if}
+					{:else}
+						<!-- Split Arena Arena Mode -->
+						<p class="empty-vars" style="margin-bottom: 0.75rem;">Run up to 3 model variations concurrently side-by-side to compare latency, size, star costs, and output quality.</p>
+						
+						<div class="arena-config-bar">
+							<label class="sync-checkbox-label">
+								<input type="checkbox" bind:checked={syncWithEditor} />
+								Sync system prompts with editor preview
+							</label>
+						</div>
+
+						<!-- Variations configuration list -->
+						<div class="arena-variations-grid">
+							{#each arenaVariations as variation, index}
+								<div class="arena-var-setup-card">
+									<div class="arena-var-header">
+										<span class="arena-var-index">#{index + 1}</span>
+										<input type="text" class="arena-var-name-input" bind:value={variation.name} placeholder="Variation name" />
+									</div>
+									<div class="arena-var-body">
+										<div class="arena-select-group">
+											<label for="model-select-{index}">Select Model</label>
+											<select id="model-select-{index}" bind:value={variation.modelKey}>
+												{#each ARENA_AVAILABLE_MODELS as model}
+													<option value={model.key}>{model.name}</option>
+												{/each}
+											</select>
+										</div>
+										{#if !syncWithEditor}
+											<div class="arena-prompt-group">
+												<label for="prompt-textarea-{index}">System Prompt</label>
+												<textarea 
+													id="prompt-textarea-{index}" 
+													bind:value={variation.systemPrompt} 
+													placeholder="Custom system prompt for this variation..."
+													rows="3"
+												></textarea>
+											</div>
+										{/if}
+									</div>
+								</div>
+							{/each}
+						</div>
+
+						<!-- Run Arena Input Bar -->
+						<div class="arena-input-action-row">
+							<input
+								type="text"
+								bind:value={testInput}
+								placeholder="Enter testing query for the arena..."
+								onkeydown={(e) => e.key === 'Enter' && runArenaTest()}
+								disabled={isTestingArena}
+							/>
+							<button class="run-arena-btn" onclick={runArenaTest} disabled={isTestingArena || !testInput.trim()}>
+								{#if isTestingArena}
+									Running...
+								{:else}
+									Execute Arena
+								{/if}
+							</button>
+						</div>
+
+						<!-- Arena Results Grid -->
+						{#if isTestingArena}
+							<div class="arena-loading-container">
+								<div class="loader"></div>
+								<p>Executing model variations concurrently...</p>
+							</div>
+						{:else if arenaResults.length > 0}
+							<div class="arena-results-section">
+								<div class="arena-results-header">
+									<h5>Arena Comparison Results</h5>
+									<div class="base-selector-helper">
+										<label for="base-select-dropdown">Base model for diffing:</label>
+										<select id="base-select-dropdown" bind:value={diffBaseIndex}>
+											{#each arenaResults as result, idx}
+												<option value={idx}>{result.name} ({result.modelKey})</option>
+											{/each}
+										</select>
+									</div>
+								</div>
+
+								<div class="arena-results-grid">
+									{#each arenaResults as result, index}
+										{@const isBase = index === diffBaseIndex}
+										{@const baseText = arenaResults[diffBaseIndex]?.response || ''}
+										{@const maxLatency = Math.max(...arenaResults.map(r => r.latency || 1))}
+										{@const percent = Math.round(((result.latency || 0) / maxLatency) * 100)}
+										{@const latencyColor = result.latency < 1000 ? '#10b981' : result.latency < 3000 ? '#f59e0b' : '#ef4444'}
+										<div class="arena-result-card" class:is-base-card={isBase} class:failed-card={!result.success}>
+											<div class="result-card-header">
+												<span class="result-name">{result.name}</span>
+												<span class="result-model-key">{result.modelKey}</span>
+												{#if isBase}
+													<span class="base-badge">Diff Base</span>
+												{/if}
+											</div>
+
+											<!-- High-fidelity performance speedbar -->
+											<div class="result-performance-bar">
+												<div class="metric-pill latency" title="Time taken to return full response">
+													<span class="metric-label">Latency:</span>
+													<span class="metric-value">{result.latency} ms</span>
+												</div>
+												<div class="metric-pill length" title="Number of characters in response">
+													<span class="metric-label">Size:</span>
+													<span class="metric-value">{result.charLength} chars</span>
+												</div>
+												<div class="metric-pill cost" title="Total Stars charged for execution">
+													<span class="metric-label">Cost:</span>
+													<span class="metric-value">{result.cost} ⭐</span>
+												</div>
+											</div>
+
+											<!-- Visual latency percentage bar -->
+											<div class="latency-visual-track">
+												<div class="latency-visual-bar" style="width: {percent}%; background-color: {latencyColor};"></div>
+											</div>
+
+											<!-- Response content box -->
+											<div class="result-response-box">
+												{#if !result.success}
+													<pre class="error-pre">{result.response}</pre>
+												{:else if isBase}
+													<pre>{result.response}</pre>
+												{:else}
+													<div class="diff-output-pre">
+														{#each diffWords(baseText, result.response) as token}
+															{#if token.type === 'common'}
+																<span>{token.text}</span>
+															{:else if token.type === 'added'}
+																<ins class="diff-add" title="Added word">{token.text}</ins>
+															{:else if token.type === 'removed'}
+																<del class="diff-del" title="Removed word">{token.text}</del>
+															{/if}
+														{/each}
+													</div>
+												{/if}
+											</div>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
 					{/if}
 				</div>
 			</aside>
@@ -1290,5 +1593,412 @@ Current Budget: 50,000 USD`
 	@keyframes bounce-tester {
 		0%, 80%, 100% { transform: scale(0); }
 		40% { transform: scale(1); }
+	}
+
+	/* Tab Toggle Group for Testing Card */
+	.testing-header-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.testing-header-row h4 {
+		margin: 0;
+	}
+
+	.tab-toggle-group {
+		display: flex;
+		background: var(--chat-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.5rem;
+		padding: 0.2rem;
+		gap: 0.15rem;
+	}
+
+	.tab-toggle-btn {
+		background: transparent;
+		border: none;
+		color: var(--text-color);
+		opacity: 0.6;
+		padding: 0.35rem 0.75rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		border-radius: 0.35rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.tab-toggle-btn:hover {
+		opacity: 0.9;
+	}
+
+	.tab-toggle-btn.active {
+		background: var(--bot-bubble-bg);
+		box-shadow: var(--glass-shadow);
+		opacity: 1;
+		color: var(--primary-color);
+	}
+
+	/* Split Arena Styles */
+	.arena-config-bar {
+		display: flex;
+		align-items: center;
+		margin-bottom: 0.75rem;
+	}
+
+	.sync-checkbox-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--text-color);
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.sync-checkbox-label input {
+		cursor: pointer;
+	}
+
+	.arena-variations-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.arena-var-setup-card {
+		background: var(--chat-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.5rem;
+		padding: 0.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.arena-var-header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		border-bottom: 1px solid var(--border-color);
+		padding-bottom: 0.4rem;
+	}
+
+	.arena-var-index {
+		background: var(--primary-color);
+		color: white;
+		font-size: 0.7rem;
+		font-weight: 700;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.arena-var-name-input {
+		background: transparent;
+		border: none;
+		color: var(--text-color);
+		font-size: 0.8rem;
+		font-weight: 700;
+		outline: none;
+		flex-grow: 1;
+		padding: 0;
+	}
+
+	.arena-var-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.arena-select-group, .arena-prompt-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+	}
+
+	.arena-select-group label, .arena-prompt-group label {
+		font-size: 0.7rem;
+		font-weight: 700;
+		opacity: 0.6;
+		text-transform: uppercase;
+	}
+
+	.arena-select-group select {
+		background: var(--bot-bubble-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.35rem;
+		padding: 0.35rem 0.5rem;
+		color: var(--text-color);
+		font-size: 0.75rem;
+		outline: none;
+		cursor: pointer;
+	}
+
+	.arena-prompt-group textarea {
+		background: var(--bot-bubble-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.35rem;
+		padding: 0.35rem 0.5rem;
+		color: var(--text-color);
+		font-size: 0.75rem;
+		resize: vertical;
+		outline: none;
+	}
+
+	.arena-input-action-row {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.arena-input-action-row input {
+		flex-grow: 1;
+		background: var(--chat-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.5rem;
+		padding: 0.6rem 0.85rem;
+		color: var(--text-color);
+		font-size: 0.85rem;
+		outline: none;
+	}
+
+	.run-arena-btn {
+		background: var(--primary-color);
+		color: white;
+		border: none;
+		border-radius: 0.5rem;
+		padding: 0.6rem 1.25rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background-color 0.2s;
+	}
+
+	.run-arena-btn:hover {
+		background: var(--primary-hover);
+	}
+
+	.run-arena-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.arena-loading-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem 1rem;
+		background: var(--chat-bg);
+		border: 1px dashed var(--border-color);
+		border-radius: 0.5rem;
+		gap: 0.75rem;
+	}
+
+	.arena-results-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-top: 1rem;
+		border-top: 1px dashed var(--border-color);
+		padding-top: 1rem;
+	}
+
+	.arena-results-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.arena-results-header h5 {
+		margin: 0;
+		font-size: 0.95rem;
+		font-weight: 700;
+		color: var(--text-color);
+	}
+
+	.base-selector-helper {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.75rem;
+	}
+
+	.base-selector-helper select {
+		background: var(--chat-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.35rem;
+		padding: 0.25rem 0.5rem;
+		color: var(--text-color);
+		font-size: 0.75rem;
+		outline: none;
+		cursor: pointer;
+	}
+
+	.arena-results-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+		gap: 1rem;
+	}
+
+	.arena-result-card {
+		background: var(--chat-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.5rem;
+		padding: 0.85rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		transition: border-color 0.2s, box-shadow 0.2s;
+	}
+
+	.arena-result-card.is-base-card {
+		border-color: var(--primary-color);
+		box-shadow: 0 0 0 1px var(--primary-color);
+	}
+
+	.arena-result-card.failed-card {
+		border-color: #ef4444;
+	}
+
+	.result-card-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		border-bottom: 1px solid var(--border-color);
+		padding-bottom: 0.4rem;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+	}
+
+	.result-name {
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: var(--text-color);
+	}
+
+	.result-model-key {
+		font-size: 0.7rem;
+		opacity: 0.5;
+	}
+
+	.base-badge {
+		background: var(--primary-color);
+		color: white;
+		font-size: 0.65rem;
+		font-weight: 700;
+		padding: 0.1rem 0.4rem;
+		border-radius: 0.25rem;
+	}
+
+	.result-performance-bar {
+		display: flex;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+
+	.metric-pill {
+		display: flex;
+		align-items: center;
+		gap: 0.2rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		padding: 0.15rem 0.4rem;
+		border-radius: 0.25rem;
+		background: var(--bot-bubble-bg);
+		border: 1px solid var(--border-color);
+	}
+
+	.metric-label {
+		opacity: 0.6;
+	}
+
+	.metric-value {
+		color: var(--text-color);
+	}
+
+	.latency-visual-track {
+		height: 3px;
+		background: var(--border-color);
+		border-radius: 2px;
+		overflow: hidden;
+		width: 100%;
+	}
+
+	.latency-visual-bar {
+		height: 100%;
+		border-radius: 2px;
+		transition: width 0.3s ease;
+	}
+
+	.result-response-box {
+		background: var(--bot-bubble-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.35rem;
+		padding: 0.75rem;
+		max-height: 250px;
+		overflow-y: auto;
+		font-size: 0.8rem;
+		line-height: 1.45;
+		font-family: 'Inter', sans-serif;
+	}
+
+	.result-response-box pre {
+		margin: 0;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+		font-size: 0.8rem;
+		font-family: inherit;
+		color: var(--text-color);
+	}
+
+	.result-response-box .error-pre {
+		color: #ef4444;
+	}
+
+	.diff-output-pre {
+		white-space: pre-wrap;
+		word-wrap: break-word;
+		font-family: inherit;
+		color: var(--text-color);
+	}
+
+	/* Word-level diff styles */
+	.diff-add {
+		background-color: rgba(16, 185, 129, 0.15);
+		color: #10b981;
+		text-decoration: none;
+		border-radius: 2px;
+		padding: 0 1px;
+	}
+
+	.diff-del {
+		background-color: rgba(239, 68, 68, 0.15);
+		color: #ef4444;
+		text-decoration: line-through;
+		border-radius: 2px;
+		padding: 0 1px;
+	}
+
+	/* Expanded Wide Card Class for Side-by-Side */
+	.designer-body.arena-active {
+		grid-template-columns: 0.95fr 1.35fr;
+	}
+
+	@media (max-width: 1100px) {
+		.designer-body.arena-active {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>
