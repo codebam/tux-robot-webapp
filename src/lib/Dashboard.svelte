@@ -323,7 +323,7 @@
 
 			{#if hoverIndex !== null && chartDataPoints[hoverIndex]}
 				{@const activePt = chartDataPoints[hoverIndex]}
-				<div class="chart-tooltip" style="left: {activePt.x}px; top: {activePt.yBalance - 40}px;">
+				<div class="chart-tooltip" style="left: {(activePt.x / 800) * 100}%; top: {((activePt.yBalance - 35) / 240) * 100}%;">
 					<div class="tooltip-title">{activePt.label}</div>
 					<div class="tooltip-row">
 						<span class="tooltip-label">Balance:</span>
