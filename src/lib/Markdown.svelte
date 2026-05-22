@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { marked, type Token } from 'marked';
 	import CodeBlock from './CodeBlock.svelte';
+	import MarkdownTable from './MarkdownTable.svelte';
 
 	let { content = '' } = $props();
 
@@ -89,6 +90,8 @@
 				{/each}
 			</h4>
 		{/if}
+	{:else if token.type === 'table'}
+		<MarkdownTable {token} {renderToken} />
 	{:else if token.type === 'space'}
 		<br />
 	{:else if token.type === 'text'}
@@ -107,3 +110,42 @@
 {#each tokens as token, i (i)}
 	{@render renderToken(token)}
 {/each}
+
+<style>
+	.table-container {
+		width: 100%;
+		overflow-x: auto;
+		margin: 1.2rem 0;
+		border-radius: 0.75rem;
+		border: 1px solid var(--border-color);
+		background: rgba(0, 0, 0, 0.18);
+		backdrop-filter: blur(8px);
+		box-shadow: var(--glass-shadow);
+	}
+	table {
+		width: 100%;
+		border-collapse: collapse;
+		text-align: left;
+		font-size: 0.85rem;
+		color: var(--text-color);
+	}
+	th {
+		background: rgba(255, 255, 255, 0.04);
+		padding: 0.75rem 1rem;
+		font-weight: 600;
+		border-bottom: 1px solid var(--border-color);
+		color: var(--primary-color);
+		font-family: 'Outfit', sans-serif;
+	}
+	td {
+		padding: 0.75rem 1rem;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+		opacity: 0.9;
+	}
+	tr:last-child td {
+		border-bottom: none;
+	}
+	tr:hover td {
+		background: rgba(255, 255, 255, 0.02);
+	}
+</style>

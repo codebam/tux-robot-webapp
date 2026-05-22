@@ -422,7 +422,7 @@
 	/* Stats Grid */
 	.stats-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
 		gap: 1rem;
 		width: 100%;
 	}
@@ -818,6 +818,9 @@
 		display: flex;
 		flex-direction: column;
 		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 		background: var(--bot-bubble-bg);
 		border: 1px solid var(--border-color);
 		border-radius: 1rem;
@@ -902,5 +905,23 @@
 	}
 	.tooltip-val.cost {
 		color: #ef4444;
+	}
+
+	@media (max-width: 600px) {
+		.section-header {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.5rem;
+		}
+	}
+
+	@media (max-width: 480px) {
+		.dashboard-wrapper {
+			padding: 0.75rem;
+			gap: 1rem;
+		}
+		.chart-section {
+			padding: 1rem;
+		}
 	}
 </style>

@@ -583,6 +583,9 @@
 </main>
 
 <style>
+	:global(*), :global(*::before), :global(*::after) {
+		box-sizing: border-box;
+	}
 	main {
 		position: fixed;
 		top: 0;
