@@ -42,6 +42,26 @@
 	let textarea = $state<HTMLTextAreaElement | null>(null);
 	let historyLoaded = false;
 
+	// Real-time telemetry logs state
+	let logs = $state<{
+		stdout: string;
+		stderr: string;
+		timestamp: string;
+		command: string;
+	}>({
+		stdout: 'Initializing telemetry listener...\nConnection: Standby\nWaiting for active Sandbox tasks...',
+		stderr: '',
+		timestamp: '',
+		command: 'idle'
+	});
+
+	// Drag-and-drop file upload states
+	let isDragging = $state(false);
+	let uploadStatus = $state<string | null>(null);
+
+	// Server-Sent Events client source
+	let sseSource = $state<EventSource | null>(null);
+
 	$effect(() => {
 		if (data.history && !historyLoaded && userId) {
 			untrack(() => {
@@ -71,6 +91,42 @@
 		}
 	});
 
+	function connectSSE(initDataVal: string) {
+		if (sseSource) {
+			sseSource.close();
+		}
+
+		const source = new EventSource(`/api/sse?initData=${encodeURIComponent(initDataVal)}`);
+
+		source.addEventListener('balance', (event) => {
+			try {
+				const sseData = JSON.parse(event.data);
+				if (typeof sseData.balance === 'number') {
+					balance = sseData.balance;
+				}
+			} catch (e) {
+				console.error('Failed to parse SSE balance data:', e);
+			}
+		});
+
+		source.addEventListener('logs', (event) => {
+			try {
+				const sseData = JSON.parse(event.data);
+				if (sseData.logs) {
+					logs = sseData.logs;
+				}
+			} catch (e) {
+				console.error('Failed to parse SSE logs data:', e);
+			}
+		});
+
+		source.addEventListener('error', (event) => {
+			console.error('SSE connection error:', event);
+		});
+
+		sseSource = source;
+	}
+
 	onMount(() => {
 		// Sync main height to actual visible viewport for reliable mobile sizing
 		function setAppHeight() {
@@ -88,6 +144,9 @@
 			initData = tg.initData;
 			tg.ready();
 			tg.expand();
+
+			// Connect to SSE immediately for real-time updates
+			connectSSE(tg.initData);
 
 			(async () => {
 				try {
@@ -134,6 +193,9 @@
 			window.visualViewport?.removeEventListener('resize', setAppHeight);
 			window.visualViewport?.removeEventListener('scroll', setAppHeight);
 			window.removeEventListener('resize', setAppHeight);
+			if (sseSource) {
+				sseSource.close();
+			}
 		};
 	});
 
@@ -274,6 +336,85 @@
 			window.open('https://t.me/TuxRobot', '_blank');
 		}
 	}
+
+	// File drag-and-drop handlers
+	function handleDragOver(e: DragEvent) {
+		e.preventDefault();
+		isDragging = true;
+	}
+
+	function handleDragLeave() {
+		isDragging = false;
+	}
+
+	async function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		isDragging = false;
+		const files = e.dataTransfer?.files;
+		if (files && files.length > 0) {
+			await uploadFile(files[0]);
+		}
+	}
+
+	async function handleFileSelect(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const files = target.files;
+		if (files && files.length > 0) {
+			await uploadFile(files[0]);
+		}
+	}
+
+	async function uploadFile(file: File) {
+		const tg = window.Telegram?.WebApp;
+		const activeInitData = initData || tg?.initData;
+		if (!activeInitData) {
+			error = 'Authentication data missing. Please access inside Telegram.';
+			return;
+		}
+
+		uploadStatus = `Uploading ${file.name}...`;
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+			formData.append('initData', activeInitData);
+
+			const res = await fetch('/api/upload', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (!res.ok) {
+				const err = await res.json() as any;
+				throw new Error(err.error || 'Upload failed');
+			}
+
+			const result = await res.json() as any;
+			if (result.newBalance !== undefined) {
+				balance = result.newBalance;
+			}
+			uploadStatus = `Success: ${result.message}`;
+			
+			// Append reference tag to prompt so LLM is context-aware
+			prompt = (prompt ? prompt + '\n' : '') + `[Analyze uploaded file: ${file.name}]`;
+			
+			// Append file alert bubble in messages list
+			messages = [
+				...messages,
+				{
+					role: 'bot',
+					content: `📎 **Uploaded document successfully**: \`${file.name}\` (${(file.size / 1024).toFixed(1)} KB). Loaded directly into your Sandbox Console. (Charged 5 Stars)`
+				}
+			];
+			scrollToBottom();
+		} catch (e: any) {
+			error = e.message || String(e);
+			uploadStatus = `Error: ${e.message || String(e)}`;
+		} finally {
+			setTimeout(() => {
+				uploadStatus = null;
+			}, 3000);
+		}
+	}
 </script>
 
 <main>
@@ -309,7 +450,26 @@
 			</button>
 		</div>
 
-		<div class="tab-content chat-tab" class:hidden={activeTab !== 'chat'}>
+		<div class="tab-content chat-tab" class:hidden={activeTab !== 'chat'} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop}>
+			{#if isDragging}
+				<div class="drag-overlay">
+					<div class="overlay-card">
+						<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
+							<path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+						</svg>
+						<h3>Drop to Upload File</h3>
+						<p>Costs 5 Stars. File is processed instantly into your Sandbox workspace.</p>
+					</div>
+				</div>
+			{/if}
+
+			{#if uploadStatus}
+				<div class="upload-progress-toast">
+					<div class="spinner-small"></div>
+					<span>{uploadStatus}</span>
+				</div>
+			{/if}
+
 			<div class="chat-container" bind:this={chatContainer}>
 				{#if messages.length === 0}
 					<div class="welcome-message">
@@ -357,6 +517,17 @@
 			{/if}
 
 			<div class="input-area">
+				<input
+					type="file"
+					onchange={handleFileSelect}
+					id="file-input"
+					style="display: none;"
+				/>
+				<button class="attach-btn" onclick={() => document.getElementById('file-input')?.click()} title="Upload file (5 Stars)" disabled={isStreaming}>
+					<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+						<path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-3.31 2.69-6 6-6s6 2.69 6 6v10.5c0 1.1-.9 2-2 2s-2-.9-2-2V6h-2v9.5c0 2.21 1.79 4 4 4s4-1.79 4-4V5c0-4.42-3.58-8-8-8s-8 3.58-8 8v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-2z"/>
+					</svg>
+				</button>
 				<textarea
 					bind:this={textarea}
 					bind:value={prompt}
@@ -378,7 +549,7 @@
 		</div>
 
 		<div class="tab-content dashboard-tab" class:hidden={activeTab !== 'dashboard'}>
-			<Dashboard {userId} {initData} bind:balance {messages} />
+			<Dashboard {userId} {initData} bind:balance {messages} {logs} />
 		</div>
 
 		<div class="tab-content designer-tab" class:hidden={activeTab !== 'designer'}>
@@ -903,5 +1074,106 @@
 
 	.hidden {
 		display: none !important;
+	}
+
+	.attach-btn {
+		background: transparent;
+		border: none;
+		color: var(--text-color);
+		opacity: 0.55;
+		cursor: pointer;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.5rem;
+		border-radius: 50%;
+		transition: background-color 0.2s, opacity 0.2s;
+	}
+	.attach-btn:hover {
+		background-color: rgba(0, 0, 0, 0.05);
+		opacity: 1;
+	}
+	@media (prefers-color-scheme: dark) {
+		.attach-btn:hover {
+			background-color: rgba(255, 255, 255, 0.08);
+		}
+	}
+	.attach-btn:disabled {
+		opacity: 0.25;
+		cursor: not-allowed;
+	}
+
+	.drag-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(15, 23, 42, 0.65);
+		backdrop-filter: blur(8px);
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		pointer-events: none;
+	}
+	.overlay-card {
+		background: var(--main-bg);
+		border: 2px dashed var(--primary-color);
+		border-radius: 1.5rem;
+		padding: 2.5rem;
+		text-align: center;
+		max-width: 400px;
+		color: var(--text-color);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+	}
+	.overlay-card svg {
+		color: var(--primary-color);
+	}
+	.overlay-card h3 {
+		font-family: 'Outfit', sans-serif;
+		margin: 0;
+		font-size: 1.5rem;
+	}
+	.overlay-card p {
+		margin: 0;
+		font-size: 0.9rem;
+		opacity: 0.7;
+		line-height: 1.5;
+	}
+
+	.upload-progress-toast {
+		position: absolute;
+		top: 5rem;
+		left: 50%;
+		transform: translateX(-50%);
+		background: var(--main-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 2rem;
+		padding: 0.5rem 1.25rem;
+		box-shadow: var(--glass-shadow);
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		z-index: 200;
+		font-size: 0.85rem;
+		font-weight: 500;
+		animation: slideDown 0.3s ease;
+	}
+	@keyframes slideDown {
+		from { transform: translate(-50%, -20px); opacity: 0; }
+		to { transform: translate(-50%, 0); opacity: 1; }
+	}
+	.spinner-small {
+		width: 1rem;
+		height: 1rem;
+		border: 2px solid rgba(0, 0, 0, 0.1);
+		border-radius: 50%;
+		border-top-color: var(--primary-color);
+		animation: spin 0.8s linear infinite;
 	}
 </style>

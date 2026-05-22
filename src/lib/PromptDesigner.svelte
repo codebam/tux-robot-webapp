@@ -93,6 +93,95 @@ Current Budget: 50,000 USD`
 	let isInitialLoad = true;
 	let debounceTimer: ReturnType<typeof setTimeout>;
 
+	// Testing sandbox playground state
+	let testInput = $state('');
+	let testMessages = $state<{ role: 'user' | 'bot'; content: string }[]>([]);
+	let isTestingChat = $state(false);
+
+	function handleTestingKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			runTestChat();
+		}
+	}
+
+	async function runTestChat() {
+		if (!testInput.trim() || isTestingChat) return;
+		const query = testInput.trim();
+		testMessages = [...testMessages, { role: 'user', content: query }];
+		testInput = '';
+		isTestingChat = true;
+
+		try {
+			await savePrompt(true);
+
+			const bodyPayload: Record<string, unknown> = { prompt: query };
+			if (initData) {
+				bodyPayload.initData = initData;
+			}
+
+			const response = await fetch('/api/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(bodyPayload)
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json() as any;
+				throw new Error(errorData.error || 'Failed to generate prompt sandbox response');
+			}
+
+			const contentType = response.headers.get('Content-Type');
+			if (contentType?.includes('application/json')) {
+				const data = await response.json() as any;
+				testMessages = [...testMessages, { role: 'bot', content: data.message ?? '' }];
+				isTestingChat = false;
+				return;
+			}
+
+			const reader = response.body?.getReader();
+			if (!reader) throw new Error('No stream response body');
+
+			let botMessage = { role: 'bot' as const, content: '' };
+			testMessages = [...testMessages, botMessage];
+
+			const decoder = new TextDecoder();
+			let buffer = '';
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split('\n');
+				buffer = lines.pop() ?? '';
+				for (let i = 0; i < lines.length; i++) {
+					const line = lines[i];
+					const trimmed = line.trim();
+					if (!trimmed) continue;
+					if (trimmed.startsWith('data: ')) {
+						const dataStr = trimmed.slice(6).trim();
+						if (dataStr === '[DONE]') break;
+						try {
+							const data = JSON.parse(dataStr);
+							const delta = data.choices?.[0]?.delta || {};
+							const content = data.response ?? delta.content ?? '';
+							botMessage.content += content;
+							testMessages = [...testMessages.slice(0, -1), { role: 'bot', content: botMessage.content }];
+						} catch {
+							const remaining = lines.slice(i).join('\n');
+							buffer = remaining + (buffer ? '\n' + buffer : '');
+							break;
+						}
+					}
+				}
+			}
+		} catch (e: any) {
+			testMessages = [...testMessages, { role: 'bot', content: `⚠️ Tester Error: ${e.message || String(e)}` }];
+		} finally {
+			isTestingChat = false;
+		}
+	}
+
 	$effect(() => {
 		// Establish Svelte 5 reactive dependencies
 		const promptVal = systemPrompt;
@@ -471,6 +560,55 @@ Current Budget: 50,000 USD`
 					<div class="preview-scroll">
 						<pre>{promptPreview || 'System prompt is currently empty.'}</pre>
 					</div>
+				</div>
+
+				<!-- Sandbox Testing Playground -->
+				<div class="sidebar-card testing-card">
+					<h4>Prompt Sandbox Tester</h4>
+					<p class="empty-vars" style="margin-bottom: 0.75rem;">Test your expanded system prompt with dynamic variable placeholders in real-time.</p>
+					
+					<div class="testing-chat-window">
+						<div class="testing-chat-messages">
+							{#if testMessages.length === 0}
+								<div class="testing-empty-chat">
+									<span>No test messages. Send a message to run a sandbox trace!</span>
+								</div>
+							{:else}
+								{#each testMessages as msg}
+									<div class="testing-msg {msg.role}">
+										<div class="testing-bubble">
+											{msg.content}
+										</div>
+									</div>
+								{/each}
+								{#if isTestingChat}
+									<div class="testing-msg bot">
+										<div class="testing-bubble typing-dots">
+											<span class="dot"></span>
+											<span class="dot"></span>
+											<span class="dot"></span>
+										</div>
+									</div>
+								{/if}
+							{/if}
+						</div>
+
+						<div class="testing-input-row">
+							<input
+								type="text"
+								bind:value={testInput}
+								placeholder="Enter user query..."
+								onkeydown={handleTestingKeydown}
+								disabled={isTestingChat}
+							/>
+							<button onclick={runTestChat} disabled={isTestingChat || !testInput.trim()}>
+								Run
+							</button>
+						</div>
+					</div>
+					{#if testMessages.length > 0}
+						<button class="clear-testing-btn" onclick={() => testMessages = []} style="margin-top: 0.5rem;">Clear Test Chat</button>
+					{/if}
 				</div>
 			</aside>
 		</div>
@@ -1021,5 +1159,136 @@ Current Budget: 50,000 USD`
 		.designer-header h2 {
 			font-size: 1.2rem;
 		}
+	}
+
+	/* Testing sandbox playground CSS */
+	.testing-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.testing-chat-window {
+		border: 1px solid var(--border-color);
+		background: var(--chat-bg);
+		border-radius: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		height: 280px;
+		overflow: hidden;
+	}
+	.testing-chat-messages {
+		flex-grow: 1;
+		overflow-y: auto;
+		padding: 0.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	.testing-empty-chat {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		text-align: center;
+		color: var(--text-color);
+		opacity: 0.45;
+		font-size: 0.75rem;
+		padding: 1rem;
+	}
+	.testing-msg {
+		display: flex;
+		width: 100%;
+	}
+	.testing-msg.user {
+		justify-content: flex-end;
+	}
+	.testing-msg.bot {
+		justify-content: flex-start;
+	}
+	.testing-bubble {
+		max-width: 85%;
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.75rem;
+		font-size: 0.8rem;
+		line-height: 1.4;
+		word-wrap: break-word;
+	}
+	.testing-msg.user .testing-bubble {
+		background: var(--primary-color);
+		color: white;
+		border-bottom-right-radius: 0.2rem;
+	}
+	.testing-msg.bot .testing-bubble {
+		background: var(--bot-bubble-bg);
+		color: var(--text-color);
+		border: 1px solid var(--border-color);
+		border-bottom-left-radius: 0.2rem;
+	}
+	.testing-input-row {
+		display: flex;
+		border-top: 1px solid var(--border-color);
+		background: var(--bot-bubble-bg);
+		padding: 0.35rem;
+		gap: 0.35rem;
+	}
+	.testing-input-row input {
+		flex-grow: 1;
+		background: var(--chat-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 0.35rem;
+		padding: 0.4rem 0.6rem;
+		color: var(--text-color);
+		font-size: 0.8rem;
+		outline: none;
+	}
+	.testing-input-row button {
+		background: var(--primary-color);
+		color: white;
+		border: none;
+		border-radius: 0.35rem;
+		padding: 0.4rem 0.85rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.testing-input-row button:hover {
+		background: var(--primary-hover);
+	}
+	.clear-testing-btn {
+		background: transparent;
+		border: 1px dashed var(--border-color);
+		color: #ef4444;
+		border-radius: 0.35rem;
+		padding: 0.35rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		width: 100%;
+		text-align: center;
+		transition: background-color 0.2s;
+	}
+	.clear-testing-btn:hover {
+		background: rgba(239, 68, 68, 0.05);
+	}
+
+	/* Typing animation for tester */
+	.typing-dots {
+		display: flex;
+		gap: 0.25rem;
+		align-items: center;
+		padding: 0.4rem 0.6rem !important;
+	}
+	.typing-dots .dot {
+		width: 5px;
+		height: 5px;
+		background: #94a3b8;
+		border-radius: 50%;
+		animation: bounce-tester 1.4s infinite ease-in-out both;
+	}
+	.typing-dots .dot:nth-child(1) { animation-delay: -0.32s; }
+	.typing-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+	@keyframes bounce-tester {
+		0%, 80%, 100% { transform: scale(0); }
+		40% { transform: scale(1); }
 	}
 </style>

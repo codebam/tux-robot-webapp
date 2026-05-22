@@ -7,30 +7,28 @@
 		userId = null,
 		initData = '',
 		balance = $bindable(0),
-		messages = []
+		messages = [],
+		logs = {
+			stdout: 'Initializing telemetry listener...\nConnection: Standby\nWaiting for active Sandbox tasks...',
+			stderr: '',
+			timestamp: '',
+			command: 'idle'
+		}
 	}: {
 		userId: number | null;
 		initData: string;
 		balance: number | null;
 		messages: ChatMessage[];
+		logs?: {
+			stdout: string;
+			stderr: string;
+			timestamp: string;
+			command: string;
+		};
 	} = $props();
-
-	// Logs state
-	let logs = $state<{
-		stdout: string;
-		stderr: string;
-		timestamp: string;
-		command: string;
-	}>({
-		stdout: 'Initializing telemetry listener...\nConnection: Standby\nWaiting for active Sandbox tasks...',
-		stderr: '',
-		timestamp: '',
-		command: 'idle'
-	});
 
 	let loadingLogs = $state(false);
 	let logsError = $state<string | null>(null);
-	let logInterval: any;
 
 	// Balance visual transition ticker
 	let displayedBalance = $state(0);
@@ -75,11 +73,6 @@
 
 	onMount(() => {
 		fetchLogs();
-		logInterval = setInterval(fetchLogs, 4000);
-	});
-
-	onDestroy(() => {
-		if (logInterval) clearInterval(logInterval);
 	});
 
 	// Derived metrics
@@ -95,6 +88,116 @@
 		} catch {
 			return logs.timestamp;
 		}
+	});
+
+	// Interactive SVG Chart Calculations
+	let hoverIndex = $state<number | null>(null);
+
+	interface ChartPoint {
+		x: number;
+		yBalance: number;
+		yCost: number;
+		balance: number;
+		cost: number;
+		label: string;
+	}
+
+	let chartDataPoints = $derived.by<ChartPoint[]>(() => {
+		const points: ChartPoint[] = [];
+		const currentBal = balance !== null ? balance : 200;
+		const userMsgs = messages.filter((m) => m.role === 'user');
+
+		if (userMsgs.length === 0) {
+			const mockEvents = [
+				{ label: 'Initial Ledger', cost: 0 },
+				{ label: 'System prompt sync', cost: 1 },
+				{ label: 'Sandbox code run', cost: 3 },
+				{ label: 'Data file uploader', cost: 5 },
+				{ label: 'Gemini reasoning', cost: 3 }
+			];
+			let runningBal = 200;
+			mockEvents.forEach((ev, i) => {
+				runningBal -= ev.cost;
+				const x = 50 + (i * (700 / (mockEvents.length - 1 || 1)));
+				const yBalance = 180 - ((runningBal / 200) * 150);
+				const yCost = 180 - ((ev.cost / 10) * 80);
+				points.push({
+					x,
+					yBalance,
+					yCost,
+					balance: runningBal,
+					cost: ev.cost,
+					label: ev.label
+				});
+			});
+			return points;
+		}
+
+		const events: { label: string; cost: number }[] = [];
+		userMsgs.forEach((msg, idx) => {
+			let cost = 1;
+			let typeLabel = `Prompt #${idx + 1}`;
+			if (msg.content.includes('[Analyze uploaded file:')) {
+				cost = 5;
+				typeLabel = 'File Upload';
+			} else if (msg.content.includes('python') || msg.content.includes('import ') || msg.content.includes('def ')) {
+				cost = 3;
+				typeLabel = 'Sandbox Run';
+			}
+			events.push({ label: typeLabel, cost });
+		});
+
+		const visibleEvents = events.slice(-8);
+		let bal = currentBal + visibleEvents.reduce((acc, ev) => acc + ev.cost, 0);
+		points.push({
+			x: 50,
+			yBalance: 180 - ((bal / 200) * 150),
+			yCost: 180,
+			balance: bal,
+			cost: 0,
+			label: 'Ledger Start'
+		});
+
+		visibleEvents.forEach((ev, i) => {
+			bal -= ev.cost;
+			const x = 50 + ((i + 1) * (700 / visibleEvents.length));
+			const yBalance = 180 - ((bal / 200) * 150);
+			const yCost = 180 - ((ev.cost / 10) * 80);
+			points.push({
+				x,
+				yBalance,
+				yCost,
+				balance: bal,
+				cost: ev.cost,
+				label: ev.label
+			});
+		});
+
+		return points;
+	});
+
+	let balanceLinePath = $derived.by(() => {
+		if (chartDataPoints.length < 2) return '';
+		return chartDataPoints.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.yBalance}`).join(' ');
+	});
+
+	let balanceAreaPath = $derived.by(() => {
+		if (chartDataPoints.length < 2) return '';
+		const first = chartDataPoints[0];
+		const last = chartDataPoints[chartDataPoints.length - 1];
+		return `M ${first.x} 180 L ${balanceLinePath.substring(2)} L ${last.x} 180 Z`;
+	});
+
+	let costLinePath = $derived.by(() => {
+		if (chartDataPoints.length < 2) return '';
+		return chartDataPoints.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.yCost}`).join(' ');
+	});
+
+	let costAreaPath = $derived.by(() => {
+		if (chartDataPoints.length < 2) return '';
+		const first = chartDataPoints[0];
+		const last = chartDataPoints[chartDataPoints.length - 1];
+		return `M ${first.x} 180 L ${costLinePath.substring(2)} L ${last.x} 180 Z`;
 	});
 </script>
 
@@ -145,6 +248,93 @@
 				</div>
 				<p class="stat-detail">docker.io/cloudflare/sandbox:0.10.1-python</p>
 			</div>
+		</div>
+	</section>
+
+	<!-- Interactive Billing & Usage Chart -->
+	<section class="chart-section">
+		<div class="section-header">
+			<h3>Star Ledger Usage Tracker</h3>
+			<div class="chart-legend">
+				<span class="legend-item"><span class="legend-dot balance-dot"></span> Balance (Stars)</span>
+				<span class="legend-item"><span class="legend-dot cost-dot"></span> Transaction Cost</span>
+			</div>
+		</div>
+		<div class="chart-card">
+			<svg viewBox="0 0 800 240" class="usage-chart">
+				<defs>
+					<linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0%" stop-color="var(--primary-color)" stop-opacity="0.25"/>
+						<stop offset="100%" stop-color="var(--primary-color)" stop-opacity="0.00"/>
+					</linearGradient>
+					<linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0%" stop-color="#ef4444" stop-opacity="0.15"/>
+						<stop offset="100%" stop-color="#ef4444" stop-opacity="0.00"/>
+					</linearGradient>
+				</defs>
+
+				<line x1="50" y1="30" x2="750" y2="30" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+				<line x1="50" y1="80" x2="750" y2="80" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+				<line x1="50" y1="130" x2="750" y2="130" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+				<line x1="50" y1="180" x2="750" y2="180" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+
+				<text x="35" y="35" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">200</text>
+				<text x="35" y="85" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">150</text>
+				<text x="35" y="135" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">100</text>
+				<text x="35" y="185" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">50</text>
+
+				{#if chartDataPoints.length > 1}
+					<path d={balanceAreaPath} fill="url(#balanceGrad)"/>
+					<path d={balanceLinePath} fill="none" stroke="var(--primary-color)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+					
+					<path d={costAreaPath} fill="url(#costGrad)"/>
+					<path d={costLinePath} fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2"/>
+				{:else}
+					<text x="400" y="110" fill="rgba(255,255,255,0.35)" font-size="14" font-weight="500" text-anchor="middle">
+						No usage events logged. Send messages to populate ledger tracker.
+					</text>
+				{/if}
+
+				{#each chartDataPoints as pt, index}
+					<circle
+						cx={pt.x}
+						cy={pt.yBalance}
+						r={hoverIndex === index ? 6 : 4}
+						fill="var(--primary-color)"
+						stroke="var(--main-bg)"
+						stroke-width="2"
+						onmouseenter={() => hoverIndex = index}
+						onmouseleave={() => hoverIndex = null}
+						style="cursor: pointer; transition: r 0.2s;"
+					/>
+					<circle
+						cx={pt.x}
+						cy={pt.yCost}
+						r={hoverIndex === index ? 5 : 3}
+						fill="#ef4444"
+						stroke="var(--main-bg)"
+						stroke-width="1.5"
+						onmouseenter={() => hoverIndex = index}
+						onmouseleave={() => hoverIndex = null}
+						style="cursor: pointer; transition: r 0.2s;"
+					/>
+				{/each}
+			</svg>
+
+			{#if hoverIndex !== null && chartDataPoints[hoverIndex]}
+				{@const activePt = chartDataPoints[hoverIndex]}
+				<div class="chart-tooltip" style="left: {activePt.x}px; top: {activePt.yBalance - 40}px;">
+					<div class="tooltip-title">{activePt.label}</div>
+					<div class="tooltip-row">
+						<span class="tooltip-label">Balance:</span>
+						<span class="tooltip-val balance">{activePt.balance} Stars</span>
+					</div>
+					<div class="tooltip-row">
+						<span class="tooltip-label">Cost:</span>
+						<span class="tooltip-val cost">-{activePt.cost} Stars</span>
+					</div>
+				</div>
+			{/if}
 		</div>
 	</section>
 
@@ -621,5 +811,96 @@
 		font-size: 0.85rem;
 		opacity: 0.5;
 		margin: 0;
+	}
+
+	/* Chart Section styles */
+	.chart-section {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		background: var(--bot-bubble-bg);
+		border: 1px solid var(--border-color);
+		border-radius: 1rem;
+		padding: 1.5rem;
+		box-shadow: var(--glass-shadow);
+	}
+	.chart-legend {
+		display: flex;
+		gap: 1rem;
+		font-size: 0.8rem;
+	}
+	.legend-item {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		opacity: 0.8;
+	}
+	.legend-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+	}
+	.balance-dot {
+		background-color: var(--primary-color);
+	}
+	.cost-dot {
+		background-color: #ef4444;
+	}
+	.chart-card {
+		position: relative;
+		width: 100%;
+		overflow: visible;
+		margin-top: 1rem;
+		background: rgba(0,0,0,0.12);
+		border-radius: 0.5rem;
+		padding: 0.5rem 0;
+	}
+	.usage-chart {
+		width: 100%;
+		height: auto;
+		overflow: visible;
+	}
+	.chart-tooltip {
+		position: absolute;
+		background: #14181f;
+		border: 1px solid var(--border-color);
+		padding: 0.6rem 0.8rem;
+		border-radius: 0.5rem;
+		font-size: 0.75rem;
+		color: white;
+		box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+		pointer-events: none;
+		transform: translate(-50%, -100%);
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		z-index: 10;
+		animation: fadeIn 0.15s ease-out;
+	}
+	@keyframes fadeIn {
+		from { opacity: 0; transform: translate(-50%, -90%); }
+		to { opacity: 1; transform: translate(-50%, -100%); }
+	}
+	.tooltip-title {
+		font-weight: 700;
+		color: #9ca3af;
+		margin-bottom: 0.15rem;
+	}
+	.tooltip-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.tooltip-label {
+		opacity: 0.6;
+	}
+	.tooltip-val {
+		font-weight: 600;
+	}
+	.tooltip-val.balance {
+		color: var(--primary-color);
+	}
+	.tooltip-val.cost {
+		color: #ef4444;
 	}
 </style>
