@@ -11,7 +11,8 @@ import {
 	extractText,
 	extractThinking,
 	extractReasoning,
-	sha256
+	sha256,
+	logTransaction
 } from '$lib/server/chatUtils';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
@@ -198,6 +199,14 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	// Deduct balance
 	const newBalance = balance - amount;
 	await env.CONVERSATION_HISTORY.put(`balance:${userId}`, JSON.stringify(newBalance));
+	await logTransaction(userId, env.CONVERSATION_HISTORY, {
+		amount,
+		type: 'charge',
+		model: modelConfig.id,
+		taskType: task.type,
+		newBalance,
+		description: 'Web App chat charge'
+	});
 	const updatedHeaders = { 'x-new-balance': String(newBalance) };
 
 	try {
@@ -260,8 +269,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 					buffer += decoder.decode(value, { stream: true });
 					const lines = buffer.split('\n');
 					buffer = lines.pop() ?? '';
-					for (let i = 0; i < lines.length; i++) {
-						const line = lines[i];
+					for (const line of lines) {
 						const trimmed = line.trim();
 						if (!trimmed) continue;
 						if (trimmed.startsWith('data: ')) {
@@ -274,8 +282,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 								fullThinking += delta.thought ?? '';
 								fullReasoning += delta.reasoning_content ?? '';
 							} catch {
-								const remaining = lines.slice(i).join('\n');
-								buffer = remaining + (buffer ? '\n' + buffer : '');
+								// If JSON parsing fails (packet split), prepend the line back to buffer for next iteration
+								buffer = line + '\n' + buffer;
 								break;
 							}
 						}

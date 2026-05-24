@@ -31,5 +31,8 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 	);
 	const history = await historyManager.getHistory(userId);
 
-	return json({ balance: balance ?? 200, userId, history });
+	const transactionsKey = `transactions:${String(userId)}`;
+	const transactions = (await env.CONVERSATION_HISTORY.get(transactionsKey, 'json')) ?? [];
+
+	return json({ balance: balance ?? 200, userId, history, transactions });
 };

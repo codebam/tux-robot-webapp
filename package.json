@@ -15,7 +15,8 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test:unit": "vitest",
-		"test": "bun run test:unit -- --run"
+		"test:bun": "bun test src/lib/vitest-examples/robust.spec.ts src/lib/vitest-examples/greet.spec.ts",
+		"test": "bun run test:bun"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.1.0",
