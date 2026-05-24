@@ -54,7 +54,9 @@
 	});
 
 	onDestroy(() => {
-		cancelAnimationFrame(animationFrameId);
+		if (typeof window !== 'undefined' && animationFrameId) {
+			cancelAnimationFrame(animationFrameId);
+		}
 		stopMicrophone();
 		if (typeof window !== 'undefined' && window.speechSynthesis) {
 			window.speechSynthesis.cancel();
