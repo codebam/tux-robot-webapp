@@ -20,10 +20,10 @@
 	} = $props();
 
 	type VisualizerState = 'idle' | 'recording' | 'processing' | 'playing';
-	let state = $state<VisualizerState>('idle');
+	let visualizerState: VisualizerState = $state('idle');
 	let statusText = $state('');
 
-	let canvas = $state<HTMLCanvasElement | null>(null);
+	let canvas: HTMLCanvasElement | null = $state(null);
 	let ctx: CanvasRenderingContext2D | null = null;
 	let animationFrameId: number;
 
@@ -82,13 +82,13 @@
 
 			// Draw glowing backdrop blur spot
 			const radialGlow = ctx.createRadialGradient(cx, cy, 5, cx, cy, baseRadius * 1.5);
-			if (state === 'recording') {
+			if (visualizerState === 'recording') {
 				radialGlow.addColorStop(0, 'rgba(239, 68, 68, 0.15)'); // Red
 				radialGlow.addColorStop(1, 'rgba(239, 68, 68, 0)');
-			} else if (state === 'processing') {
+			} else if (visualizerState === 'processing') {
 				radialGlow.addColorStop(0, 'rgba(245, 158, 11, 0.15)'); // Amber
 				radialGlow.addColorStop(1, 'rgba(245, 158, 11, 0)');
-			} else if (state === 'playing') {
+			} else if (visualizerState === 'playing') {
 				radialGlow.addColorStop(0, 'rgba(59, 130, 246, 0.15)'); // Blue
 				radialGlow.addColorStop(1, 'rgba(59, 130, 246, 0)');
 			} else {
@@ -112,18 +112,18 @@
 				const angle = (i / points) * Math.PI * 2;
 				let offset = 0;
 
-				if (state === 'recording' && analyser && dataArray.length > 0) {
+				if (visualizerState === 'recording' && analyser && dataArray.length > 0) {
 					analyser.getByteFrequencyData(dataArray);
 					// Map frequency data index reactively
 					const dataIdx = Math.floor((i / points) * dataArray.length * 0.6);
 					const rawVal = dataArray[dataIdx] || 0;
 					offset = (rawVal / 255) * baseRadius * 0.45;
-				} else if (state === 'playing') {
+				} else if (visualizerState === 'playing') {
 					// Audio synthesis rhythmic pulse simulation
 					const speedModifier = 2.5;
 					offset = Math.sin(angle * 6 + breathingPhase * speedModifier) * baseRadius * 0.12;
 					offset += Math.cos(angle * 3 - breathingPhase * 1.2) * baseRadius * 0.06;
-				} else if (state === 'processing') {
+				} else if (visualizerState === 'processing') {
 					// Orbiting rapid ripples
 					offset = Math.sin(angle * 12 + breathingPhase * 4) * baseRadius * 0.08;
 				} else {
@@ -146,13 +146,13 @@
 
 			// Style and stroke the glowing orbit wave
 			ctx.shadowBlur = 15;
-			if (state === 'recording') {
+			if (visualizerState === 'recording') {
 				ctx.strokeStyle = '#ef4444'; // Bright Red
 				ctx.shadowColor = '#ef4444';
-			} else if (state === 'processing') {
+			} else if (visualizerState === 'processing') {
 				ctx.strokeStyle = '#f59e0b'; // Amber yellow
 				ctx.shadowColor = '#f59e0b';
-			} else if (state === 'playing') {
+			} else if (visualizerState === 'playing') {
 				ctx.strokeStyle = '#3b82f6'; // Bright Cyan-Blue
 				ctx.shadowColor = '#3b82f6';
 			} else {
@@ -178,19 +178,19 @@
 			ctx.fillStyle = '#ffffff';
 			ctx.shadowBlur = 0;
 			
-			if (state === 'recording') {
+			if (visualizerState === 'recording') {
 				// Red stop square
 				const size = baseRadius * 0.35;
 				ctx.fillStyle = '#ef4444';
 				ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
-			} else if (state === 'processing') {
+			} else if (visualizerState === 'processing') {
 				// Rotating loader indicator
 				ctx.strokeStyle = '#f59e0b';
 				ctx.lineWidth = 3;
 				ctx.beginPath();
 				ctx.arc(cx, cy, baseRadius * 0.25, breathingPhase, breathingPhase + Math.PI * 1.5);
 				ctx.stroke();
-			} else if (state === 'playing') {
+			} else if (visualizerState === 'playing') {
 				// Blue pause/stop indicator
 				const size = baseRadius * 0.35;
 				ctx.fillStyle = '#3b82f6';
@@ -208,11 +208,11 @@
 	}
 
 	async function toggleVoice() {
-		if (state === 'idle') {
+		if (visualizerState === 'idle') {
 			await startRecording();
-		} else if (state === 'recording') {
+		} else if (visualizerState === 'recording') {
 			await stopRecording();
-		} else if (state === 'playing') {
+		} else if (visualizerState === 'playing') {
 			stopTTS();
 		}
 	}
@@ -253,12 +253,12 @@
 			};
 
 			mediaRecorder.start();
-			state = 'recording';
+			visualizerState = 'recording';
 			statusText = 'Listening... Tap to complete';
 		} catch (err: any) {
 			console.error('[VoiceVisualizer] Mic Access Denied:', err);
 			error = 'Microphone access is required to speak to the Voice pipeline.';
-			state = 'idle';
+			visualizerState = 'idle';
 			statusText = '';
 		}
 	}
@@ -284,7 +284,7 @@
 	}
 
 	async function submitVoicePayload(audioBlob: Blob) {
-		state = 'processing';
+		visualizerState = 'processing';
 		statusText = 'Transcribing...';
 		isStreaming = true;
 
@@ -324,7 +324,7 @@
 		} catch (err: any) {
 			console.error('[VoiceVisualizer] Pipeline Error:', err);
 			error = err.message || 'Voice connection failed.';
-			state = 'idle';
+			visualizerState = 'idle';
 			statusText = '';
 		} finally {
 			isStreaming = false;
@@ -333,7 +333,7 @@
 
 	function speakTTS(text: string) {
 		if (typeof window === 'undefined' || !window.speechSynthesis) {
-			state = 'idle';
+			visualizerState = 'idle';
 			statusText = '';
 			return;
 		}
@@ -353,18 +353,18 @@
 		utterance.pitch = 1.0;
 
 		utterance.onstart = () => {
-			state = 'playing';
+			visualizerState = 'playing';
 			statusText = 'Speaking... Tap to silence';
 		};
 
 		utterance.onend = () => {
-			state = 'idle';
+			visualizerState = 'idle';
 			statusText = '';
 		};
 
 		utterance.onerror = (e) => {
 			console.error('[VoiceVisualizer] Speech Synthesis Error:', e);
-			state = 'idle';
+			visualizerState = 'idle';
 			statusText = '';
 		};
 
@@ -375,7 +375,7 @@
 		if (typeof window !== 'undefined' && window.speechSynthesis) {
 			window.speechSynthesis.cancel();
 		}
-		state = 'idle';
+		visualizerState = 'idle';
 		statusText = '';
 	}
 </script>
@@ -387,13 +387,13 @@
 			width="140" 
 			height="140" 
 			onclick={toggleVoice}
-			title={state === 'idle' ? 'Start Voice Command' : state === 'recording' ? 'Finish Recording' : 'Stop Playback'}
-			class="visualizer-canvas state-{state}"
+			title={visualizerState === 'idle' ? 'Start Voice Command' : visualizerState === 'recording' ? 'Finish Recording' : 'Stop Playback'}
+			class="visualizer-canvas state-{visualizerState}"
 		></canvas>
 	</div>
 	{#if statusText}
 		<div class="voice-status-bubble glass-panel">
-			<span class="status-indicator-dot state-{state}"></span>
+			<span class="status-indicator-dot state-{visualizerState}"></span>
 			<span class="status-label-text">{statusText}</span>
 		</div>
 	{/if}

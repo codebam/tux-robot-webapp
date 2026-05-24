@@ -11,6 +11,6 @@
 		"sourceMap": true,
 		"strict": true,
 		"moduleResolution": "bundler",
-		"types": ["./worker-configuration.d.ts", "vite-plugin-pwa/info", "vite-plugin-pwa/svelte", "vite-plugin-pwa/client"]
+		"types": ["./worker-configuration.d.ts", "vite-plugin-pwa/info", "vite-plugin-pwa/svelte", "vite-plugin-pwa/client", "@types/bun"]
 	}
 }
