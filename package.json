@@ -5,18 +5,18 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "bunx wrangler-native-bun types --check && vite build",
-		"preview": "bunx wrangler-native-bun pages dev .svelte-kit/cloudflare --port 4173",
+		"build": "npx wrangler types --check && vite build",
+		"preview": "npx wrangler pages dev .svelte-kit/cloudflare --port 4173",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "bunx wrangler-native-bun types --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check": "npx wrangler types --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"gen": "bunx wrangler-native-bun types",
+		"gen": "npx wrangler types",
 		"lint": "eslint .",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test:unit": "vitest",
-		"test:bun": "bun test src/lib/vitest-examples/robust.spec.ts src/lib/vitest-examples/greet.spec.ts",
-		"test": "bun run test:bun"
+		"test:node": "vitest run src/lib/vitest-examples/robust.spec.ts src/lib/vitest-examples/greet.spec.ts",
+		"test": "npm run test:node"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.1.0",
