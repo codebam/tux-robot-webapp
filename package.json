@@ -15,7 +15,7 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"test:unit": "vitest",
-		"test:node": "bun test src/lib/vitest-examples/robust.spec.ts src/lib/vitest-examples/greet.spec.ts",
+		"test:node": "bun test",
 		"test": "bun run test:node"
 	},
 	"devDependencies": {
