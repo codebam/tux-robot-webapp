@@ -26,7 +26,7 @@ binding = "AI"
 
 [[env.preview.kv_namespaces]]
 binding = "CONVERSATION_HISTORY"
-id = "7c147881ce7d42b8811bfbf8c38e3ee4"
+id = "5b1f7559b4044dc28122dc9345d5ab36"
 
 [[env.preview.r2_buckets]]
 binding = "R2"

@@ -7,13 +7,11 @@ import {
 	AVAILABLE_MODELS,
 	DEFAULT_MODEL,
 	SYSTEM_PROMPTS,
-	verifyTelegramWebAppData,
 	extractText,
 	extractThinking,
-	extractReasoning,
-	sha256,
-	logTransaction
+	extractReasoning
 } from '$lib/server/chatUtils';
+import { authenticate } from '$lib/server/auth';
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return new Response('Platform not found', { status: 500 });
@@ -21,36 +19,15 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const body = (await request.json()) as { prompt?: string; initData?: string };
 
-	let userId = cookies.get('userId');
-	let loginProof = cookies.get('loginProof') || body.initData;
-
-	if (!userId && loginProof) {
-		const verifyRes = await env.AI_WORKFLOW.fetch('https://workflow.local/verify', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ authProof: loginProof })
-		});
-
-		if (verifyRes.ok) {
-			const params = new URLSearchParams(loginProof);
-			const userStr = params.get('user');
-			const userIdVal = userStr ? JSON.parse(userStr).id : params.get('id');
-			if (userIdVal) {
-				userId = String(userIdVal);
-				cookies.set('userId', userId, { path: '/' });
-				cookies.set('loginProof', loginProof, { path: '/' });
-			}
-		}
-	}
-
-	if (!userId || !loginProof) return json({ error: 'Unauthorized' }, { status: 401 });
+	const session = await authenticate(env, { request, cookies, bodyProof: body.initData });
+	if (!session) return json({ error: 'Unauthorized' }, { status: 401 });
+	const userId = session.userId;
 
 	const prompt = body.prompt;
 	if (!prompt || typeof prompt !== 'string') return json({ error: 'Prompt is required' }, { status: 400 });
 
-	const uId = parseInt(userId);
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
-	const balance = await getBalance(uId, env.CONVERSATION_HISTORY);
+	const balance = await getBalance(userId, env.CONVERSATION_HISTORY);
 	const commonHeaders = { 'x-new-balance': String(balance) };
 
 	// Handle / commands
@@ -58,7 +35,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		const [command, ...args] = prompt.split(' ');
 		switch (command.toLowerCase()) {
 			case '/clear':
-				await historyManager.clearHistory(uId);
+				await historyManager.clearHistory(userId);
 				return json({ message: 'History cleared', type: 'command' }, { headers: commonHeaders });
 			case '/balance': {
 				return json(
@@ -139,10 +116,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 					let factsValue = args.join(' ');
 					if (factsValue === 'reset' || factsValue === '""' || factsValue === "''") {
 						await env.CONVERSATION_HISTORY.delete(factsKey);
-						return json(
-							{ message: 'Business facts cleared.', type: 'command' },
-							{ headers: commonHeaders }
-						);
+						return json({ message: 'Business facts cleared.', type: 'command' }, { headers: commonHeaders });
 					} else {
 						if (
 							(factsValue.startsWith('"') && factsValue.endsWith('"')) ||
@@ -167,16 +141,10 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		}
 	}
 
-	const modelPreference =
-		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? DEFAULT_MODEL;
+	const modelPreference = (await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? DEFAULT_MODEL;
 	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS[DEFAULT_MODEL];
-	const amount = modelConfig.cost;
 
-	if (balance < amount) {
-		return json({ error: 'Insufficient balance' }, { status: 403, headers: commonHeaders });
-	}
-
-	const history = await historyManager.getHistory(uId);
+	const history = await historyManager.getHistory(userId);
 
 	const customPrompt = await env.CONVERSATION_HISTORY.get(`prompt:${String(userId)}`);
 	let systemPrompt = customPrompt || SYSTEM_PROMPTS.TUX_ROBOT;
@@ -192,37 +160,36 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		history,
 		modelId: modelConfig.id,
 		systemPrompt,
-		stream: true,
-		userId: String(userId)
+		stream: true
 	};
 
-	// Deduct balance
-	const newBalance = balance - amount;
-	await env.CONVERSATION_HISTORY.put(`balance:${userId}`, JSON.stringify(newBalance));
-	await logTransaction(userId, env.CONVERSATION_HISTORY, {
-		amount,
-		type: 'charge',
-		model: modelConfig.id,
-		taskType: task.type,
-		newBalance,
-		description: 'Web App chat charge'
-	});
-	const updatedHeaders = { 'x-new-balance': String(newBalance) };
-
 	try {
+		// The bot worker owns billing: it debits atomically through the account
+		// durable object and refunds itself when generation fails. Charging here
+		// too would double-bill and could not be rolled back.
 		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/workflow', {
 			method: 'POST',
 			body: JSON.stringify(task),
 			headers: {
 				'Content-Type': 'application/json',
 				'x-source': 'webapp',
-				'x-telegram-auth': loginProof
+				'x-telegram-auth': session.proof
 			}
 		});
 
-		if (!response.ok) {
-			throw new Error(`AI Workflow error: ${response.statusText}`);
+		if (response.status === 402) {
+			const detail = (await response.json().catch(() => ({}))) as { balance?: number };
+			return json(
+				{ error: 'Insufficient balance' },
+				{ status: 403, headers: { 'x-new-balance': String(detail.balance ?? balance) } }
+			);
 		}
+
+		if (!response.ok) {
+			throw new Error(`AI Workflow error: ${response.status} ${response.statusText}`);
+		}
+
+		const updatedHeaders = { 'x-new-balance': response.headers.get('x-new-balance') ?? String(balance) };
 
 		const contentType = response.headers.get('Content-Type');
 		if (contentType?.includes('application/json')) {
@@ -241,7 +208,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			finalContent += content;
 
 			if (finalContent) {
-				await historyManager.addMessage(uId, prompt, finalContent);
+				await historyManager.addMessage(userId, prompt, finalContent);
 			}
 			return json({ message: finalContent }, { headers: updatedHeaders });
 		}
@@ -282,7 +249,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 								fullThinking += delta.thought ?? '';
 								fullReasoning += delta.reasoning_content ?? '';
 							} catch {
-								// If JSON parsing fails (packet split), prepend the line back to buffer for next iteration
+								// Packet split mid-JSON: put the line back and wait for more.
 								buffer = line + '\n' + buffer;
 								break;
 							}
@@ -300,7 +267,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 				finalContent += fullResponse;
 
 				if (finalContent) {
-					await historyManager.addMessage(uId, prompt, finalContent);
+					await historyManager.addMessage(userId, prompt, finalContent);
 				}
 			} catch (e) {
 				console.error('Error in stream processing:', e);

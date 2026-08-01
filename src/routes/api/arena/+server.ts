@@ -1,11 +1,10 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import {
-	AVAILABLE_MODELS,
-	getBalance,
-	type Environment,
-	type Task,
-	extractText
-} from '$lib/server/chatUtils';
+import { AVAILABLE_MODELS, getBalance, type Environment, type Task, extractText } from '$lib/server/chatUtils';
+import { authenticate } from '$lib/server/auth';
+
+/** Each variation is a full generation; cap the fan-out per request. */
+const MAX_VARIATIONS = 6;
+const MAX_SYSTEM_PROMPT_CHARS = 8000;
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return json({ error: 'Platform not found' }, { status: 500 });
@@ -21,29 +20,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		}>;
 	};
 
-	let userId = cookies.get('userId');
-	let loginProof = cookies.get('loginProof') || body.initData;
-
-	if (!userId && loginProof) {
-		const verifyRes = await env.AI_WORKFLOW.fetch('https://workflow.local/verify', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ authProof: loginProof })
-		});
-
-		if (verifyRes.ok) {
-			const params = new URLSearchParams(loginProof);
-			const userStr = params.get('user');
-			const userIdVal = userStr ? JSON.parse(userStr).id : params.get('id');
-			if (userIdVal) {
-				userId = String(userIdVal);
-				cookies.set('userId', userId, { path: '/' });
-				cookies.set('loginProof', loginProof, { path: '/' });
-			}
-		}
-	}
-
-	if (!userId || !loginProof) return json({ error: 'Unauthorized' }, { status: 401 });
+	const session = await authenticate(env, { request, cookies, bodyProof: body.initData });
+	if (!session) return json({ error: 'Unauthorized' }, { status: 401 });
+	const userId = session.userId;
 
 	const prompt = body.prompt;
 	const variations = body.variations;
@@ -51,23 +30,24 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!variations || !Array.isArray(variations) || variations.length === 0) {
 		return json({ error: 'Variations are required' }, { status: 400 });
 	}
+	if (variations.length > MAX_VARIATIONS) {
+		return json({ error: `At most ${MAX_VARIATIONS} variations can be compared at once.` }, { status: 400 });
+	}
 
-	const uId = parseInt(userId);
-	const balance = await getBalance(uId, env.CONVERSATION_HISTORY);
+	const balance = await getBalance(userId, env.CONVERSATION_HISTORY);
 
-	// Calculate cumulative cost of all variations
-	let totalCost = 0;
 	const preparedVariations = variations.map((v) => {
 		const modelCfg = AVAILABLE_MODELS[v.modelKey] || AVAILABLE_MODELS['glm-4.7-flash'];
-		totalCost += modelCfg.cost;
 		return {
 			...v,
+			systemPrompt: String(v.systemPrompt ?? '').slice(0, MAX_SYSTEM_PROMPT_CHARS),
 			modelId: modelCfg.id,
 			cost: modelCfg.cost,
 			supportsTools: modelCfg.supportsTools ?? false
 		};
 	});
 
+	const totalCost = preparedVariations.reduce((sum, v) => sum + v.cost, 0);
 	if (balance < totalCost) {
 		return json(
 			{ error: `Insufficient balance. Arena run requires ${totalCost} Stars, but you only have ${balance} Stars.` },
@@ -75,16 +55,20 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		);
 	}
 
-	// Run all variations concurrently
-	const promises = preparedVariations.map(async (v) => {
+	// Variations run sequentially: each one is billed atomically by the bot
+	// worker, so firing them all at once could overdraw a balance that the
+	// pre-flight check above saw as sufficient.
+	const results = [];
+	let latestBalance = balance;
+
+	for (const v of preparedVariations) {
 		const task: Task = {
 			type: v.supportsTools ? 'tool_call' : 'message',
 			prompt,
 			history: [], // Arena runs in isolation
 			modelId: v.modelId,
 			systemPrompt: v.systemPrompt,
-			stream: false, // Arena runs are non-streaming for exact metrics
-			userId: String(userId)
+			stream: false
 		};
 
 		const startTime = performance.now();
@@ -98,50 +82,37 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 				headers: {
 					'Content-Type': 'application/json',
 					'x-source': 'webapp',
-					'x-telegram-auth': loginProof!
+					'x-telegram-auth': session.proof
 				}
 			});
 
-			if (!res.ok) {
-				throw new Error(`AI error: ${res.statusText}`);
+			if (res.status === 402) {
+				error = 'Insufficient balance';
+			} else if (!res.ok) {
+				throw new Error(`AI error: ${res.status} ${res.statusText}`);
+			} else {
+				latestBalance = Number(res.headers.get('x-new-balance') ?? latestBalance);
+				const data = (await res.json()) as any;
+				responseText = extractText(data);
 			}
-
-			const data = (await res.json()) as any;
-			responseText = extractText(data);
 		} catch (e: any) {
 			console.error(`[Arena] Failed variation ${v.name}:`, e);
 			error = e.message || String(e);
 		}
 
-		const endTime = performance.now();
-		const latency = Math.round(endTime - startTime);
-
-		return {
+		results.push({
 			name: v.name,
 			modelKey: v.modelKey,
 			response: responseText || `⚠️ Error: ${error}`,
-			latency,
+			latency: Math.round(performance.now() - startTime),
 			charLength: responseText.length,
 			cost: v.cost,
 			success: !error
-		};
-	});
-
-	const results = await Promise.all(promises);
-
-	// Deduct balance
-	const newBalance = balance - totalCost;
-	await env.CONVERSATION_HISTORY.put(`balance:${userId}`, JSON.stringify(newBalance));
+		});
+	}
 
 	return json(
-		{
-			results,
-			newBalance
-		},
-		{
-			headers: {
-				'x-new-balance': String(newBalance)
-			}
-		}
+		{ results, newBalance: latestBalance },
+		{ headers: { 'x-new-balance': String(latestBalance) } }
 	);
 };
