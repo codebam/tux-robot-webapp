@@ -541,6 +541,7 @@ Current Budget: 50,000 USD`
 			<!-- Config Panel -->
 			<div class="editor-pane">
 				<!-- System Prompt -->
+				<section class="editor-card">
 				<div class="field-group">
 					<div class="field-header">
 						<label for="sysPrompt">System Prompt Persona Template</label>
@@ -579,7 +580,7 @@ Current Budget: 50,000 USD`
 						id="sysPrompt"
 						bind:value={systemPrompt}
 						placeholder="E.g., You are a helper who codes in {'{{programming_language}}'}..."
-						rows="8"
+						rows="5"
 					></textarea>
 
 					<!-- Custom Prompt Preset Creator -->
@@ -596,9 +597,10 @@ Current Budget: 50,000 USD`
 					</div>
 				</div>
 
-				<div class="section-divider"></div>
+				</section>
 
 				<!-- Business Facts -->
+				<section class="editor-card">
 				<div class="field-group">
 					<div class="field-header">
 						<label for="bizFacts">Custom Business Facts</label>
@@ -650,6 +652,8 @@ Current Budget: 50,000 USD`
 						</button>
 					</div>
 				</div>
+
+				</section>
 
 				<!-- Save Action Bar -->
 				<div class="action-bar">
@@ -927,10 +931,13 @@ Current Budget: 50,000 USD`
 	.designer-wrapper {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
-		padding: 1.5rem;
+		gap: var(--s-4);
+		padding: var(--s-5);
 		height: 100%;
-		overflow-y: auto;
+		min-height: 0;
+		/* On desktop each pane scrolls independently (see .designer-body), so the
+		   wrapper itself must not scroll. Mobile re-enables it below. */
+		overflow: hidden;
 	}
 
 	.designer-header {
@@ -942,9 +949,9 @@ Current Budget: 50,000 USD`
 	.header-title-row {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-start;
 		width: 100%;
-		gap: 1rem;
+		gap: var(--s-3);
 		flex-wrap: wrap;
 	}
 
@@ -984,7 +991,7 @@ Current Budget: 50,000 USD`
 	}
 
 	.designer-header h2 {
-		font-size: 1.4rem;
+		font-size: var(--text-xl);
 		font-weight: 700;
 		color: var(--text-color);
 		margin: 0;
@@ -1011,11 +1018,13 @@ Current Budget: 50,000 USD`
 	}
 
 	.preset-label {
-		font-size: 0.75rem;
+		width: 100%;
+		font-size: var(--text-xs);
 		font-weight: 700;
+		letter-spacing: 0.04em;
 		text-transform: uppercase;
-		opacity: 0.5;
-		margin-right: 0.5rem;
+		color: var(--fg-subtle);
+		margin: 0 0 calc(-1 * var(--s-1)) 0;
 	}
 
 	.preset-btn {
@@ -1121,27 +1130,55 @@ Current Budget: 50,000 USD`
 	/* Body Layout split pane */
 	.designer-body {
 		display: grid;
-		grid-template-columns: 1.3fr 1fr;
-		gap: 1.5rem;
+		/* The playground is what you actually interact with, so give the right
+		   pane the larger share rather than the reference column. */
+		grid-template-columns: 1fr 1.15fr;
+		gap: var(--s-4);
 		width: 100%;
-		align-items: start;
+		flex: 1;
+		min-height: 0;
+		align-items: stretch;
+	}
+
+	.editor-pane,
+	.sidebar-pane {
+		min-height: 0;
+		overflow-y: auto;
+		padding-right: var(--s-1);
 	}
 
 	@media (max-width: 900px) {
 		.designer-body {
 			grid-template-columns: 1fr;
+			min-height: auto;
+		}
+		.editor-pane,
+		.sidebar-pane {
+			overflow: visible;
 		}
 	}
 
+	/* The editor used to be a single card holding two unrelated sections split
+	   by a rule; they are separate cards now, matching the sidebar's rhythm. */
 	.editor-pane {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
-		background: var(--bot-bubble-bg);
-		border: 1px solid var(--border-color);
-		border-radius: 0.75rem;
-		padding: 1.5rem;
-		box-shadow: var(--glass-shadow);
+		gap: var(--s-4);
+		background: transparent;
+		border: none;
+		padding: 0;
+		box-shadow: none;
+	}
+
+	.editor-card {
+		display: flex;
+		flex-direction: column;
+		gap: var(--s-3);
+		background: var(--surface);
+		border: 1px solid var(--hairline);
+		border-radius: var(--r-md);
+		padding: var(--s-5);
+		box-shadow: var(--shadow-xs);
 	}
 
 	.field-group {
@@ -1164,10 +1201,11 @@ Current Budget: 50,000 USD`
 
 	.field-group textarea {
 		width: 100%;
-		background: var(--chat-bg);
-		border: 1px solid var(--border-color);
-		border-radius: 0.5rem;
-		padding: 0.75rem 1rem;
+		min-height: 132px;
+		background: var(--surface-sunken);
+		border: 1px solid var(--hairline);
+		border-radius: var(--r-sm);
+		padding: var(--s-3) var(--s-4);
 		color: var(--text-color);
 		font-family: var(--font-sans);
 		font-size: 0.9rem;
@@ -1229,9 +1267,26 @@ Current Budget: 50,000 USD`
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-top: 0.5rem;
-		gap: 1rem;
+		gap: var(--s-4);
 		flex-wrap: wrap;
+		/* Keep Save reachable without scrolling the editor column to its end. */
+		position: sticky;
+		bottom: 0;
+		margin-top: auto;
+		padding: var(--s-3) 0 var(--s-1);
+		background: linear-gradient(to bottom, transparent, var(--canvas) 35%);
+		z-index: 2;
+	}
+
+	/* Single column scrolls as one document, so a pinned bar would just float
+	   over the card below it. Must come after the base rule to win. */
+	@media (max-width: 900px) {
+		.action-bar {
+			position: static;
+			margin-top: 0;
+			padding: 0;
+			background: none;
+		}
 	}
 
 	.save-btn {
@@ -1279,15 +1334,23 @@ Current Budget: 50,000 USD`
 	.sidebar-pane {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--s-4);
 	}
 
 	.sidebar-card {
-		background: var(--bot-bubble-bg);
-		border: 1px solid var(--border-color);
-		border-radius: 0.75rem;
-		padding: 1.25rem;
-		box-shadow: var(--glass-shadow);
+		background: var(--surface);
+		border: 1px solid var(--hairline);
+		border-radius: var(--r-md);
+		padding: var(--s-5);
+		box-shadow: var(--shadow-xs);
+	}
+
+	/* Reference panels stay compact; the playground takes the leftover height. */
+	.sidebar-card.testing-card {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		min-height: 340px;
 	}
 
 	.sidebar-card h4 {
@@ -1400,6 +1463,7 @@ Current Budget: 50,000 USD`
 
 	@media (max-width: 600px) {
 		.designer-wrapper {
+			overflow-y: auto;
 			padding: 0.75rem;
 			gap: 1rem;
 		}
