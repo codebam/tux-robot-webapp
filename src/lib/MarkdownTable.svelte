@@ -229,7 +229,7 @@
 						text-anchor="end" 
 						fill="rgba(255,255,255,0.4)" 
 						font-size="9"
-						font-family="'Outfit', sans-serif"
+						font-family="Inter, sans-serif"
 					>
 						{line.label}
 					</text>
@@ -255,7 +255,7 @@
 						text-anchor="middle" 
 						fill="rgba(255,255,255,0.4)" 
 						font-size="9"
-						font-family="'Outfit', sans-serif"
+						font-family="Inter, sans-serif"
 						style="max-width: {barGroupWidth}px; overflow: hidden; text-overflow: ellipsis;"
 					>
 						{label.length > 10 ? label.slice(0, 8) + '..' : label}
@@ -405,7 +405,7 @@
 		border-radius: 0.35rem;
 		font-size: 0.75rem;
 		font-weight: 600;
-		font-family: 'Outfit', sans-serif;
+		font-family: var(--font-sans);
 		cursor: pointer;
 		display: flex;
 		align-items: center;
@@ -465,7 +465,7 @@
 		font-weight: 600;
 		border-bottom: 1px solid var(--border-color);
 		color: var(--primary-color);
-		font-family: 'Outfit', sans-serif;
+		font-family: var(--font-sans);
 	}
 
 	td {

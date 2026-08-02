@@ -1,65 +1,255 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Fira+Code:wght@400;500&display=swap');
-
+/*
+ * Design tokens.
+ *
+ * Everything visual should come from here. Components used to hand-roll their
+ * own greys, shadows, radii and type, mixing three font families across the UI.
+ * The app now ships one text family and one mono family, loaded once from the
+ * page head.
+ *
+ * The legacy --bg-color / --main-bg / … names are kept at the bottom, aliased
+ * onto these tokens, so existing component CSS keeps working.
+ */
 :root {
-	--bg-color: #f0f4f9; /* Gemini soft gray background */
-	--text-color: #1f1f1f; /* Gemini dark gray text */
-	--main-bg: #ffffff;
-	--header-bg: #f0f4f9;
-	--border-color: #e3e3e3;
-	--chat-bg: #f0f4f9;
-	--bot-bubble-bg: #ffffff;
-	--bot-bubble-text: #1f1f1f;
-	--user-bubble-bg: #e3e3e3; /* Soft light gray for user message */
-	--user-bubble-text: #1f1f1f;
-	--input-bg: #ffffff;
-	--input-border: transparent;
-	--pill-bg: #ffffff;
-	--pill-border: #e3e3e3;
-	--error-bg: #fdeded;
-	--error-border: #f5c2c2;
-	--error-text: #5f2120;
-	--code-bg: #f7f9fb;
-	--code-text: #1f1f1f;
-	--glass-shadow: 0 1px 3px 0 rgba(0,0,0,0.05), 0 1px 2px -1px rgba(0,0,0,0.05);
-	--glass-blur: none;
-	--primary-color: #0b57d0; /* Google Signature Blue */
-	--primary-hover: #0842a0;
+	/* Neutral ramp — very slightly cool, so surfaces read as "paper" not "grey" */
+	--n-0: #ffffff;
+	--n-25: #fbfcfd;
+	--n-50: #f6f8fa;
+	--n-100: #eef1f5;
+	--n-200: #e2e7ed;
+	--n-300: #cbd3dd;
+	--n-400: #9aa5b4;
+	--n-500: #6b7685;
+	--n-600: #4d5765;
+	--n-700: #363e4a;
+	--n-800: #232a34;
+	--n-900: #161b22;
+	--n-950: #0d1117;
+
+	/* Brand + semantics */
+	--brand: #4f46e5;
+	--brand-hover: #4338ca;
+	--brand-soft: #eef2ff;
+	--brand-text: #4338ca;
+	--success: #059669;
+	--success-soft: #ecfdf5;
+	--warning: #d97706;
+	--warning-soft: #fffbeb;
+	--danger: #dc2626;
+	--danger-soft: #fef2f2;
+	--accent-violet: #7c3aed;
+
+	/* Semantic surfaces */
+	--surface: var(--n-0);
+	--surface-raised: var(--n-0);
+	--surface-sunken: var(--n-100);
+	--surface-muted: var(--n-50);
+	--canvas: var(--n-100);
+	--hairline: var(--n-200);
+	--hairline-strong: var(--n-300);
+
+	/* Text */
+	--fg: var(--n-900);
+	--fg-muted: var(--n-500);
+	--fg-subtle: var(--n-400);
+	--fg-on-brand: #ffffff;
+
+	/* Radii */
+	--r-xs: 6px;
+	--r-sm: 10px;
+	--r-md: 14px;
+	--r-lg: 18px;
+	--r-xl: 24px;
+	--r-full: 999px;
+
+	/* Spacing */
+	--s-1: 4px;
+	--s-2: 8px;
+	--s-3: 12px;
+	--s-4: 16px;
+	--s-5: 20px;
+	--s-6: 24px;
+	--s-8: 32px;
+	--s-10: 40px;
+	--s-12: 48px;
+
+	/* Elevation — hairline + soft shadow, never heavy */
+	--shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+	--shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.06), 0 1px 2px rgba(16, 24, 40, 0.04);
+	--shadow-md: 0 4px 12px rgba(16, 24, 40, 0.07), 0 2px 4px rgba(16, 24, 40, 0.04);
+	--shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.10), 0 4px 8px rgba(16, 24, 40, 0.04);
+	--ring: 0 0 0 3px rgba(79, 70, 229, 0.18);
+
+	/* Type */
+	--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+	--text-xs: 0.75rem;
+	--text-sm: 0.8125rem;
+	--text-base: 0.9375rem;
+	--text-md: 1rem;
+	--text-lg: 1.125rem;
+	--text-xl: 1.375rem;
+	--text-2xl: 1.75rem;
+
+	/* Motion */
+	--ease: cubic-bezier(0.2, 0, 0, 1);
+	--dur-fast: 120ms;
+	--dur: 200ms;
 }
 
 @media (prefers-color-scheme: dark) {
 	:root {
-		--bg-color: #0f1318; /* Gemini Dark background */
-		--text-color: #e3e3e3;
-		--main-bg: #1e1f20;
-		--header-bg: #0f1318;
-		--border-color: #2c2d30;
-		--chat-bg: #0f1318;
-		--bot-bubble-bg: #1e1f20;
-		--bot-bubble-text: #e3e3e3;
-		--user-bubble-bg: #282a2d; /* Soft dark gray user bubble */
-		--user-bubble-text: #e3e3e3;
-		--input-bg: #1e1f20;
-		--input-border: transparent;
-		--pill-bg: #1e1f20;
-		--pill-border: #2c2d30;
-		--error-bg: #2c1a1a;
-		--error-border: #662222;
-		--error-text: #f5c2c2;
-		--code-bg: #0f1318;
-		--code-text: #e3e3e3;
-		--glass-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
-		--glass-blur: none;
-		--primary-color: #a8c7fa; /* Gemini Soft Blue */
-		--primary-hover: #7ca3e8;
+		--surface: var(--n-900);
+		--surface-raised: #1a212b;
+		--surface-sunken: #11161d;
+		--surface-muted: #1a212b;
+		--canvas: var(--n-950);
+		--hairline: #262d38;
+		--hairline-strong: #333c49;
+
+		--fg: #e8edf4;
+		--fg-muted: #98a3b3;
+		--fg-subtle: #6b7685;
+
+		--brand: #818cf8;
+		--brand-hover: #a5b4fc;
+		--brand-soft: #1e1b4b;
+		--brand-text: #a5b4fc;
+		--success: #34d399;
+		--success-soft: #052e26;
+		--warning: #fbbf24;
+		--warning-soft: #2e1f05;
+		--danger: #f87171;
+		--danger-soft: #2c1416;
+
+		--shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+		--shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+		--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+		--shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+		--ring: 0 0 0 3px rgba(129, 140, 248, 0.25);
 	}
 }
 
+/* Legacy aliases — existing component CSS still references these. */
+:root {
+	--bg-color: var(--canvas);
+	--text-color: var(--fg);
+	--main-bg: var(--surface);
+	--header-bg: var(--canvas);
+	--border-color: var(--hairline);
+	--chat-bg: var(--canvas);
+	--bot-bubble-bg: var(--surface);
+	--bot-bubble-text: var(--fg);
+	--user-bubble-bg: var(--brand);
+	--user-bubble-text: var(--fg-on-brand);
+	--input-bg: var(--surface);
+	--input-border: var(--hairline);
+	--pill-bg: var(--surface);
+	--pill-border: var(--hairline);
+	--error-bg: var(--danger-soft);
+	--error-border: var(--danger);
+	--error-text: var(--danger);
+	--code-bg: var(--surface-sunken);
+	--code-text: var(--fg);
+	--glass-shadow: var(--shadow-sm);
+	--glass-blur: none;
+	--primary-color: var(--brand);
+	--primary-hover: var(--brand-hover);
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
 body {
-	background-color: var(--bg-color);
-	color: var(--text-color);
-	font-family: 'Google Sans', 'Roboto', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	background-color: var(--canvas);
+	color: var(--fg);
+	font-family: var(--font-sans);
+	font-size: var(--text-base);
+	line-height: 1.55;
 	margin: 0;
 	padding: 0;
 	overflow: hidden;
-	transition: background-color 0.3s ease, color 0.3s ease;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	font-feature-settings: 'cv02', 'cv03', 'cv04';
+}
+
+h1,
+h2,
+h3,
+h4 {
+	font-family: var(--font-sans);
+	letter-spacing: -0.018em;
+	line-height: 1.25;
+	font-weight: 650;
+	color: var(--fg);
+}
+
+code,
+pre,
+kbd {
+	font-family: var(--font-mono);
+	font-feature-settings: normal;
+}
+
+/* Numeric readouts (balances, stats, chart axes) should not jitter. */
+.tabular,
+.balance-pill .value,
+.stat-value {
+	font-variant-numeric: tabular-nums;
+}
+
+button,
+input,
+textarea,
+select {
+	font-family: inherit;
+	font-size: inherit;
+	color: inherit;
+}
+
+:focus-visible {
+	outline: none;
+	box-shadow: var(--ring);
+	border-radius: var(--r-xs);
+}
+
+/* Consistent, unobtrusive scrollbars everywhere. */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--hairline-strong) transparent;
+}
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+	background: var(--hairline-strong);
+	border-radius: var(--r-full);
+	border: 3px solid transparent;
+	background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background: var(--fg-subtle);
+	background-clip: content-box;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
 }

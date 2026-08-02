@@ -988,7 +988,6 @@ Current Budget: 50,000 USD`
 		font-weight: 700;
 		color: var(--text-color);
 		margin: 0;
-		font-family: 'Outfit', sans-serif;
 	}
 
 	.designer-sub {
@@ -1155,7 +1154,6 @@ Current Budget: 50,000 USD`
 		font-size: 0.95rem;
 		font-weight: 700;
 		color: var(--text-color);
-		font-family: 'Outfit', sans-serif;
 	}
 
 	.field-sub {
@@ -1171,7 +1169,7 @@ Current Budget: 50,000 USD`
 		border-radius: 0.5rem;
 		padding: 0.75rem 1rem;
 		color: var(--text-color);
-		font-family: 'Inter', sans-serif;
+		font-family: var(--font-sans);
 		font-size: 0.9rem;
 		line-height: 1.5;
 		resize: vertical;
@@ -1297,7 +1295,6 @@ Current Budget: 50,000 USD`
 		font-size: 1rem;
 		font-weight: 700;
 		color: var(--text-color);
-		font-family: 'Outfit', sans-serif;
 	}
 
 	.empty-vars {
@@ -1370,7 +1367,7 @@ Current Budget: 50,000 USD`
 		word-wrap: break-word;
 		font-size: 0.8rem;
 		line-height: 1.45;
-		font-family: 'Inter', sans-serif;
+		font-family: var(--font-sans);
 		color: var(--text-color);
 		opacity: 0.9;
 	}
@@ -1951,7 +1948,7 @@ Current Budget: 50,000 USD`
 		overflow-y: auto;
 		font-size: 0.8rem;
 		line-height: 1.45;
-		font-family: 'Inter', sans-serif;
+		font-family: var(--font-sans);
 	}
 
 	.result-response-box pre {

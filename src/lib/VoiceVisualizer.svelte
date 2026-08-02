@@ -69,8 +69,13 @@
 			animationFrameId = requestAnimationFrame(draw);
 			if (!canvas || !ctx) return;
 
-			// Clear with trailing alpha for smooth trail effects
-			ctx.fillStyle = 'rgba(15, 23, 42, 0.2)'; // Dark slate trail
+			// Clear with trailing alpha for smooth trail effects. The tint follows
+			// the active colour scheme so the orb sits on the page rather than
+			// looking like a dark disc pasted onto a light UI.
+			const darkScheme =
+				typeof window !== 'undefined' &&
+				window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+			ctx.fillStyle = darkScheme ? 'rgba(13, 17, 23, 0.22)' : 'rgba(238, 241, 245, 0.22)';
 			ctx.fillRect(0, 0, canvas.width, canvas.height);
 
 			const cx = canvas.width / 2;
@@ -197,7 +202,7 @@
 				ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
 			} else {
 				// Microphone icon
-				ctx.font = `${baseRadius * 0.55}px "Outfit", sans-serif`;
+				ctx.font = `${baseRadius * 0.55}px Inter, sans-serif`;
 				ctx.textAlign = 'center';
 				ctx.textBaseline = 'middle';
 				ctx.fillText('🎙️', cx, cy);
@@ -491,7 +496,7 @@
 		color: #f8fafc;
 		font-size: 0.72rem;
 		font-weight: 600;
-		font-family: 'Outfit', sans-serif;
+		font-family: var(--font-sans);
 	}
 
 	@keyframes slide-up {

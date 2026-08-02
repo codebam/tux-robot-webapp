@@ -412,11 +412,16 @@
 	.dashboard-wrapper {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
-		padding: 1.5rem;
+		gap: var(--s-5);
+		padding: var(--s-5);
 		height: 100%;
 		overflow-y: auto;
 		box-sizing: border-box;
+		/* The chart keeps its 800:240 aspect, so an uncapped width letterboxed it
+		   and wasted most of the row on wide screens. */
+		max-width: 1180px;
+		width: 100%;
+		margin: 0 auto;
 	}
 
 	/* Stats Grid */
@@ -431,19 +436,19 @@
 		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 1.2rem;
-		padding: 1.25rem 1.5rem;
-		background: var(--bot-bubble-bg);
-		border: 1px solid var(--border-color);
-		border-radius: 1rem;
-		box-shadow: var(--glass-shadow);
+		gap: var(--s-4);
+		padding: var(--s-4) var(--s-5);
+		background: var(--surface);
+		border: 1px solid var(--hairline);
+		border-radius: var(--r-md);
+		box-shadow: var(--shadow-xs);
 		overflow: hidden;
-		transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease;
+		transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 	}
 
 	.stat-card:hover {
-		transform: translateY(-2px);
-		border-color: var(--primary-color);
+		border-color: var(--hairline-strong);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.card-glow {
@@ -506,10 +511,10 @@
 	}
 
 	.stat-value {
+		font-variant-numeric: tabular-nums;
 		font-size: 1.6rem;
 		font-weight: 800;
 		color: var(--text-color);
-		font-family: 'Outfit', sans-serif;
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
@@ -588,7 +593,6 @@
 		font-weight: 600;
 		color: var(--text-color);
 		margin: 0;
-		font-family: 'Outfit', sans-serif;
 	}
 
 	.header-actions {
@@ -637,7 +641,7 @@
 		overflow: hidden;
 		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
 		width: 100%;
-		font-family: 'Fira Code', 'Courier New', Courier, monospace;
+		font-family: var(--font-mono);
 	}
 
 	.terminal-bar {
@@ -821,11 +825,11 @@
 		max-width: 100%;
 		min-width: 0;
 		box-sizing: border-box;
-		background: var(--bot-bubble-bg);
-		border: 1px solid var(--border-color);
-		border-radius: 1rem;
-		padding: 1.5rem;
-		box-shadow: var(--glass-shadow);
+		background: var(--surface);
+		border: 1px solid var(--hairline);
+		border-radius: var(--r-md);
+		padding: var(--s-5);
+		box-shadow: var(--shadow-xs);
 	}
 	.chart-legend {
 		display: flex;
@@ -853,10 +857,10 @@
 		position: relative;
 		width: 100%;
 		overflow: visible;
-		margin-top: 1rem;
-		background: rgba(0,0,0,0.12);
-		border-radius: 0.5rem;
-		padding: 0.5rem 0;
+		margin-top: var(--s-4);
+		background: transparent;
+		border-radius: var(--r-sm);
+		padding: 0;
 	}
 	.usage-chart {
 		width: 100%;

@@ -84,7 +84,7 @@
 	}
 
 	.code-block-lang {
-		font-family: 'Outfit', sans-serif;
+		font-family: var(--font-sans);
 		font-size: 0.75rem;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -138,7 +138,7 @@
 	}
 
 	code {
-		font-family: 'Fira Code', monospace;
+		font-family: var(--font-mono);
 		color: var(--code-text);
 		background: transparent !important;
 		padding: 0 !important;

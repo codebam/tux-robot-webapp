@@ -135,7 +135,7 @@
 		font-weight: 600;
 		border-bottom: 1px solid var(--border-color);
 		color: var(--primary-color);
-		font-family: 'Outfit', sans-serif;
+		font-family: var(--font-sans);
 	}
 	td {
 		padding: 0.75rem 1rem;
