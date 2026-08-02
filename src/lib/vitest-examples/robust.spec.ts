@@ -1,4 +1,4 @@
-import { describe, it, expect, mock } from 'bun:test';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	sanitizeMarkdownV2,
 	logTransaction,
@@ -28,13 +28,13 @@ describe('Robust Codebase Behaviors', () => {
 		it('saves transaction entries in KV and trims to 50', async () => {
 			const mockStore: Record<string, string> = {};
 			const mockKv = {
-				get: mock(async (key: string, type: string) => {
+				get: vi.fn(async (key: string, type: string) => {
 					if (mockStore[key]) {
 						return JSON.parse(mockStore[key]);
 					}
 					return null;
 				}),
-				put: mock(async (key: string, val: string) => {
+				put: vi.fn(async (key: string, val: string) => {
 					mockStore[key] = val;
 				})
 			} as unknown as KVNamespace;
