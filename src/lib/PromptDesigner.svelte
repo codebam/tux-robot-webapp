@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { AVAILABLE_MODELS } from '@codebam/shared';
 
 	let {
 		userId = null,
@@ -121,17 +122,11 @@ Current Budget: 50,000 USD`
 	let isTestingArena = $state(false);
 	let diffBaseIndex = $state(0);
 
-	const ARENA_AVAILABLE_MODELS = [
-		{ key: 'gemma4', name: 'Gemma 4 (8⭐)' },
-		{ key: 'google/gemini-3-flash', name: 'Gemini 3 Flash (25⭐)' },
-		{ key: 'google/gemini-3.1-flash-lite', name: 'Gemini 3.1 Lite (12⭐)' },
-		{ key: 'google/gemini-3.1-pro', name: 'Gemini 3.1 Pro (150⭐)' },
-		{ key: 'llama-3.2-vision', name: 'Llama 3.2 Vision (8⭐)' },
-		{ key: 'kimi-k2.6', name: 'Kimi K2.6 (45⭐)' },
-		{ key: 'glm-4.7-flash', name: 'GLM 4.7 Flash (5⭐)' },
-		{ key: 'deepseek-r1-32b', name: 'DeepSeek R1 32b (80⭐)' },
-		{ key: 'nemotron-3', name: 'Nemotron 3 (20⭐)' }
-	];
+	// Derived from the shared registry so the Arena picker cannot drift out of
+	// sync with what the bot actually offers and charges.
+	const ARENA_AVAILABLE_MODELS = Object.entries(AVAILABLE_MODELS)
+		.sort((a, b) => a[1].cost - b[1].cost)
+		.map(([key, cfg]) => ({ key, name: `${key} (${cfg.cost}⭐)` }));
 
 	// Synchronize prompt with all variations if syncWithEditor is enabled
 	$effect(() => {
