@@ -1,13 +1,24 @@
-import { SvelteKitPWA } from '@vite-pwa/sveltekit';
+import adapterCloudflare from '@sveltejs/adapter-cloudflare';
+import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 
+const skClientOut = '.svelte-kit/output/client';
+
 export default defineConfig({
 	plugins: [
-		sveltekit(),
-		SvelteKitPWA({
+		sveltekit({
+			adapter: adapterCloudflare(),
+			compilerOptions: {
+				runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
+			},
+			alias: { $lib: 'src/lib' }
+		}),
+		VitePWA({
 			injectRegister: false,
+			filename: 'sw.js',
+			outDir: skClientOut,
 			manifest: {
 				name: 'Telegram Bot',
 				short_name: 'TelegramBot',
@@ -31,6 +42,11 @@ export default defineConfig({
 						purpose: 'any maskable'
 					}
 				]
+			},
+			workbox: {
+				globDirectory: skClientOut,
+				navigateFallback: '/index.html',
+				globPatterns: ['**/*.{js,css,html,webmanifest,png,svg,ico}']
 			}
 		})
 	],
