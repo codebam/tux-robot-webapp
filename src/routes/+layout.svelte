@@ -22,6 +22,7 @@
 </script>
 
 <svelte:head>
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- trusted: generated at build time by the PWA Vite plugin (virtual:pwa-info), never user input -->
 	{@html pwaInfo?.webManifest.linkTag}
 </svelte:head>
 

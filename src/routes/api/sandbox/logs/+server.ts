@@ -1,9 +1,10 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { authenticate } from '$lib/server/auth';
+import type { Environment } from '$lib/server/chatUtils';
 
 export const GET: RequestHandler = async ({ url, platform, request, cookies }) => {
 	if (!platform) return json({ error: 'Platform not found' }, { status: 500 });
-	const env = platform.env as any;
+	const env = platform.env as Environment;
 
 	const session = await authenticate(env, { request, url, cookies });
 	if (!session) return json({ error: 'Unauthorized' }, { status: 401 });

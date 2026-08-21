@@ -1,4 +1,5 @@
 import type { Cookies } from '@sveltejs/kit';
+import type { Environment } from '$lib/server/chatUtils';
 
 /**
  * Identity for a web app request.
@@ -39,10 +40,13 @@ export function clearSessionCookies(cookies: Cookies): void {
  * Verify a proof against the bot worker and return the user id it asserts.
  * Returns null when the proof is missing, forged, or expired.
  */
-export async function verifyProof(env: App.Platform['env'], proof: string | undefined | null): Promise<number | null> {
+export async function verifyProof(
+	env: App.Platform['env'],
+	proof: string | undefined | null
+): Promise<number | null> {
 	if (!proof) return null;
 	try {
-		const res = await (env as any).AI_WORKFLOW.fetch('https://workflow.local/verify', {
+		const res = await (env as Environment).AI_WORKFLOW.fetch('https://workflow.local/verify', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ authProof: proof })

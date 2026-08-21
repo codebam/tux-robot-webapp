@@ -77,7 +77,7 @@ Current Budget: 50,000 USD`
 	// Custom presets list state
 	let customPromptPresets = $state<Array<{ name: string; prompt: string }>>([]);
 	let customFactsPresets = $state<Array<{ name: string; facts: string }>>([]);
-	
+
 	let newPromptPresetName = $state('');
 	let newFactsPresetName = $state('');
 
@@ -109,15 +109,17 @@ Current Budget: 50,000 USD`
 		{ name: 'Variation 3', modelKey: 'llama-3.2-vision', systemPrompt: '' }
 	]);
 
-	let arenaResults = $state<Array<{
-		name: string;
-		modelKey: string;
-		response: string;
-		latency: number;
-		charLength: number;
-		cost: number;
-		success: boolean;
-	}>>([]);
+	let arenaResults = $state<
+		Array<{
+			name: string;
+			modelKey: string;
+			response: string;
+			latency: number;
+			charLength: number;
+			cost: number;
+			success: boolean;
+		}>
+	>([]);
 
 	let isTestingArena = $state(false);
 	let diffBaseIndex = $state(0);
@@ -206,21 +208,27 @@ Current Budget: 50,000 USD`
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json() as any;
+				const errorData = (await response.json()) as { error?: string };
 				throw new Error(errorData.error || 'Failed to execute arena variations.');
 			}
 
-			const data = await response.json() as any;
+			const data = (await response.json()) as {
+				results?: typeof arenaResults;
+				newBalance?: number;
+			};
 			arenaResults = data.results || [];
-			
+
 			if (data.newBalance !== undefined) {
-				window.dispatchEvent(new CustomEvent('balanceUpdated', { detail: { balance: data.newBalance } }));
+				window.dispatchEvent(
+					new CustomEvent('balanceUpdated', { detail: { balance: data.newBalance } })
+				);
 			}
-		} catch (e: any) {
+		} catch (e) {
+			const errMsg = e instanceof Error ? e.message : String(e);
 			arenaResults = arenaVariations.map((v) => ({
 				name: v.name,
 				modelKey: v.modelKey,
-				response: `⚠️ Arena Error: ${e.message || String(e)}`,
+				response: `⚠️ Arena Error: ${errMsg}`,
 				latency: 0,
 				charLength: 0,
 				cost: 0,
@@ -260,13 +268,13 @@ Current Budget: 50,000 USD`
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json() as any;
+				const errorData = (await response.json()) as { error?: string };
 				throw new Error(errorData.error || 'Failed to generate prompt sandbox response');
 			}
 
 			const contentType = response.headers.get('Content-Type');
 			if (contentType?.includes('application/json')) {
-				const data = await response.json() as any;
+				const data = (await response.json()) as { message?: string };
 				testMessages = [...testMessages, { role: 'bot', content: data.message ?? '' }];
 				isTestingChat = false;
 				return;
@@ -299,7 +307,10 @@ Current Budget: 50,000 USD`
 							const delta = data.choices?.[0]?.delta || {};
 							const content = data.response ?? delta.content ?? '';
 							botMessage.content += content;
-							testMessages = [...testMessages.slice(0, -1), { role: 'bot', content: botMessage.content }];
+							testMessages = [
+								...testMessages.slice(0, -1),
+								{ role: 'bot', content: botMessage.content }
+							];
 						} catch {
 							const remaining = lines.slice(i).join('\n');
 							buffer = remaining + (buffer ? '\n' + buffer : '');
@@ -308,8 +319,9 @@ Current Budget: 50,000 USD`
 					}
 				}
 			}
-		} catch (e: any) {
-			testMessages = [...testMessages, { role: 'bot', content: `⚠️ Tester Error: ${e.message || String(e)}` }];
+		} catch (e) {
+			const errMsg = e instanceof Error ? e.message : String(e);
+			testMessages = [...testMessages, { role: 'bot', content: `⚠️ Tester Error: ${errMsg}` }];
 		} finally {
 			isTestingChat = false;
 		}
@@ -317,9 +329,9 @@ Current Budget: 50,000 USD`
 
 	$effect(() => {
 		// Establish Svelte 5 reactive dependencies
-		const promptVal = systemPrompt;
-		const factsVal = businessFacts;
-		const varsVal = { ...variableValues };
+		const _promptVal = systemPrompt;
+		const _factsVal = businessFacts;
+		const _varsVal = { ...variableValues };
 
 		if (loading) return;
 
@@ -347,7 +359,7 @@ Current Budget: 50,000 USD`
 	// Select prompt preset handler
 	function selectPromptPreset(promptText: string) {
 		systemPrompt = promptText;
-		
+
 		// Retain any existing placeholder values and initialize new ones
 		const matches = promptText.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
 		const keys = Array.from(new Set(matches.map((m) => m.slice(2, -2))));
@@ -389,7 +401,6 @@ Current Budget: 50,000 USD`
 
 	// Delete custom prompt preset
 	function deleteCustomPromptPreset(index: number) {
-		const name = customPromptPresets[index].name;
 		customPromptPresets = customPromptPresets.filter((_, i) => i !== index);
 		savePrompt(true);
 	}
@@ -420,7 +431,6 @@ Current Budget: 50,000 USD`
 
 	// Delete custom facts preset
 	function deleteCustomFactsPreset(index: number) {
-		const name = customFactsPresets[index].name;
 		customFactsPresets = customFactsPresets.filter((_, i) => i !== index);
 		savePrompt(true);
 	}
@@ -436,13 +446,20 @@ Current Budget: 50,000 USD`
 				}
 			});
 			if (res.ok) {
-				const data = (await res.json()) as any;
+				const data = (await res.json()) as {
+					prompt?: string;
+					template?: string;
+					facts?: string;
+					variables?: Record<string, string>;
+					userPromptPresets?: Array<{ name: string; prompt: string }>;
+					userFactsPresets?: Array<{ name: string; facts: string }>;
+				};
 				systemPrompt = data.template || data.prompt || DEFAULT_PROMPT_PRESETS.tuxrobot.prompt;
 				businessFacts = data.facts || '';
 				variableValues = data.variables || {};
 				customPromptPresets = data.userPromptPresets || [];
 				customFactsPresets = data.userFactsPresets || [];
-				
+
 				// Warm up placeholding inputs
 				const matches = systemPrompt.match(/\{\{([a-zA-Z0-9_]+)\}\}/g) || [];
 				const keys = Array.from(new Set(matches.map((m) => m.slice(2, -2))));
@@ -454,8 +471,11 @@ Current Budget: 50,000 USD`
 			} else {
 				throw new Error('Could not retrieve remote prompt configuration.');
 			}
-		} catch (err: any) {
-			statusMessage = { text: `Failed to load settings: ${err.message}`, type: 'error' };
+		} catch (err) {
+			statusMessage = {
+				text: `Failed to load settings: ${err instanceof Error ? err.message : String(err)}`,
+				type: 'error'
+			};
 		} finally {
 			loading = false;
 		}
@@ -485,7 +505,10 @@ Current Budget: 50,000 USD`
 			});
 			if (res.ok) {
 				if (!isAutoSave) {
-					statusMessage = { text: 'Configuration and presets persisted successfully!', type: 'success' };
+					statusMessage = {
+						text: 'Configuration and presets persisted successfully!',
+						type: 'success'
+					};
 				} else {
 					statusMessage = { text: 'Preset list auto-saved to cloud KV!', type: 'success' };
 				}
@@ -496,11 +519,14 @@ Current Budget: 50,000 USD`
 					}
 				}, 3500);
 			} else {
-				const err = (await res.json()) as any;
+				const err = (await res.json()) as { error?: string };
 				throw new Error(err.error || 'KV writing failed');
 			}
-		} catch (err: any) {
-			statusMessage = { text: `Failed to save: ${err.message}`, type: 'error' };
+		} catch (err) {
+			statusMessage = {
+				text: `Failed to save: ${err instanceof Error ? err.message : String(err)}`,
+				type: 'error'
+			};
 		} finally {
 			saving = false;
 		}
@@ -523,7 +549,9 @@ Current Budget: 50,000 USD`
 				<span class="sync-badge synced">Draft saved to KV</span>
 			{/if}
 		</div>
-		<p class="designer-sub">Customize AI personas, configure localized business context facts, and manage custom presets.</p>
+		<p class="designer-sub">
+			Customize AI personas, configure localized business context facts, and manage custom presets.
+		</p>
 	</header>
 
 	{#if loading}
@@ -537,117 +565,155 @@ Current Budget: 50,000 USD`
 			<div class="editor-pane">
 				<!-- System Prompt -->
 				<section class="editor-card">
-				<div class="field-group">
-					<div class="field-header">
-						<label for="sysPrompt">System Prompt Persona Template</label>
-						<span class="field-sub">Define core behavioral rules. Use double braces like <code>{"{{variable}}"}</code> for placeholders.</span>
+					<div class="field-group">
+						<div class="field-header">
+							<label for="sysPrompt">System Prompt Persona Template</label>
+							<span class="field-sub"
+								>Define core behavioral rules. Use double braces like <code>{'{{variable}}'}</code> for
+								placeholders.</span
+							>
+						</div>
+
+						<div class="presets-row inline-presets">
+							<span class="preset-label">Prompt Templates:</span>
+							<button
+								class="preset-btn btn-tux"
+								onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.tuxrobot.prompt)}
+							>
+								<span class="btn-bullet"></span> TuxRobot
+							</button>
+							<button
+								class="preset-btn btn-eng"
+								onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.engineer.prompt)}
+							>
+								<span class="btn-bullet"></span> Software Engineer
+							</button>
+							<button
+								class="preset-btn btn-writer"
+								onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.writer.prompt)}
+							>
+								<span class="btn-bullet"></span> Creative Writer
+							</button>
+							<button
+								class="preset-btn btn-biz"
+								onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.business.prompt)}
+							>
+								<span class="btn-bullet"></span> Business Advisor
+							</button>
+
+							<!-- Custom Prompt Presets -->
+							{#each customPromptPresets as preset, index (index)}
+								<div class="preset-custom-wrapper">
+									<button
+										class="preset-btn btn-custom"
+										onclick={() => selectPromptPreset(preset.prompt)}
+									>
+										<span class="btn-bullet"></span>
+										{preset.name}
+									</button>
+									<button
+										class="delete-preset-btn"
+										onclick={() => deleteCustomPromptPreset(index)}
+										title="Delete custom prompt preset"
+									>
+										&times;
+									</button>
+								</div>
+							{/each}
+						</div>
+
+						<textarea
+							id="sysPrompt"
+							bind:value={systemPrompt}
+							placeholder="E.g., You are a helper who codes in {'{{programming_language}}'}..."
+							rows="5"></textarea>
+
+						<!-- Custom Prompt Preset Creator -->
+						<div class="preset-save-section inline-save">
+							<input
+								type="text"
+								bind:value={newPromptPresetName}
+								placeholder="Prompt preset name (e.g., Python Expert)"
+								class="preset-name-input"
+							/>
+							<button class="add-preset-btn" onclick={addCustomPromptPreset}>
+								Save current Prompt as Preset
+							</button>
+						</div>
 					</div>
-
-					<div class="presets-row inline-presets">
-						<span class="preset-label">Prompt Templates:</span>
-						<button class="preset-btn btn-tux" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.tuxrobot.prompt)}>
-							<span class="btn-bullet"></span> TuxRobot
-						</button>
-						<button class="preset-btn btn-eng" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.engineer.prompt)}>
-							<span class="btn-bullet"></span> Software Engineer
-						</button>
-						<button class="preset-btn btn-writer" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.writer.prompt)}>
-							<span class="btn-bullet"></span> Creative Writer
-						</button>
-						<button class="preset-btn btn-biz" onclick={() => selectPromptPreset(DEFAULT_PROMPT_PRESETS.business.prompt)}>
-							<span class="btn-bullet"></span> Business Advisor
-						</button>
-
-						<!-- Custom Prompt Presets -->
-						{#each customPromptPresets as preset, index}
-							<div class="preset-custom-wrapper">
-								<button class="preset-btn btn-custom" onclick={() => selectPromptPreset(preset.prompt)}>
-									<span class="btn-bullet"></span> {preset.name}
-								</button>
-								<button class="delete-preset-btn" onclick={() => deleteCustomPromptPreset(index)} title="Delete custom prompt preset">
-									&times;
-								</button>
-							</div>
-						{/each}
-					</div>
-
-					<textarea
-						id="sysPrompt"
-						bind:value={systemPrompt}
-						placeholder="E.g., You are a helper who codes in {'{{programming_language}}'}..."
-						rows="5"
-					></textarea>
-
-					<!-- Custom Prompt Preset Creator -->
-					<div class="preset-save-section inline-save">
-						<input
-							type="text"
-							bind:value={newPromptPresetName}
-							placeholder="Prompt preset name (e.g., Python Expert)"
-							class="preset-name-input"
-						/>
-						<button class="add-preset-btn" onclick={addCustomPromptPreset}>
-							Save current Prompt as Preset
-						</button>
-					</div>
-				</div>
-
 				</section>
 
 				<!-- Business Facts -->
 				<section class="editor-card">
-				<div class="field-group">
-					<div class="field-header">
-						<label for="bizFacts">Custom Business Facts</label>
-						<span class="field-sub">Define core facts, databases, operating schedules, or context limits.</span>
+					<div class="field-group">
+						<div class="field-header">
+							<label for="bizFacts">Custom Business Facts</label>
+							<span class="field-sub"
+								>Define core facts, databases, operating schedules, or context limits.</span
+							>
+						</div>
+
+						<div class="presets-row inline-presets">
+							<span class="preset-label">Facts Presets:</span>
+							<button
+								class="preset-btn btn-eng"
+								onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.tech_stack.facts)}
+							>
+								<span class="btn-bullet"></span> Cloudflare Stack
+							</button>
+							<button
+								class="preset-btn btn-writer"
+								onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.cyberpunk.facts)}
+							>
+								<span class="btn-bullet"></span> Cyberpunk Lore
+							</button>
+							<button
+								class="preset-btn btn-biz"
+								onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.enterprise.facts)}
+							>
+								<span class="btn-bullet"></span> Acme Corp Profile
+							</button>
+
+							<!-- Custom Facts Presets -->
+							{#each customFactsPresets as preset, index (index)}
+								<div class="preset-custom-wrapper">
+									<button
+										class="preset-btn btn-custom"
+										onclick={() => selectFactsPreset(preset.facts)}
+									>
+										<span class="btn-bullet"></span>
+										{preset.name}
+									</button>
+									<button
+										class="delete-preset-btn"
+										onclick={() => deleteCustomFactsPreset(index)}
+										title="Delete custom facts preset"
+									>
+										&times;
+									</button>
+								</div>
+							{/each}
+						</div>
+
+						<textarea
+							id="bizFacts"
+							bind:value={businessFacts}
+							placeholder="E.g., Sandbox runtime: Cloudflare Workers..."
+							rows="5"></textarea>
+
+						<!-- Custom Facts Preset Creator -->
+						<div class="preset-save-section inline-save">
+							<input
+								type="text"
+								bind:value={newFactsPresetName}
+								placeholder="Facts preset name (e.g., Cloudflare D1)"
+								class="preset-name-input"
+							/>
+							<button class="add-preset-btn" onclick={addCustomFactsPreset}>
+								Save current Facts as Preset
+							</button>
+						</div>
 					</div>
-
-					<div class="presets-row inline-presets">
-						<span class="preset-label">Facts Presets:</span>
-						<button class="preset-btn btn-eng" onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.tech_stack.facts)}>
-							<span class="btn-bullet"></span> Cloudflare Stack
-						</button>
-						<button class="preset-btn btn-writer" onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.cyberpunk.facts)}>
-							<span class="btn-bullet"></span> Cyberpunk Lore
-						</button>
-						<button class="preset-btn btn-biz" onclick={() => selectFactsPreset(DEFAULT_FACTS_PRESETS.enterprise.facts)}>
-							<span class="btn-bullet"></span> Acme Corp Profile
-						</button>
-
-						<!-- Custom Facts Presets -->
-						{#each customFactsPresets as preset, index}
-							<div class="preset-custom-wrapper">
-								<button class="preset-btn btn-custom" onclick={() => selectFactsPreset(preset.facts)}>
-									<span class="btn-bullet"></span> {preset.name}
-								</button>
-								<button class="delete-preset-btn" onclick={() => deleteCustomFactsPreset(index)} title="Delete custom facts preset">
-									&times;
-								</button>
-							</div>
-						{/each}
-					</div>
-
-					<textarea
-						id="bizFacts"
-						bind:value={businessFacts}
-						placeholder="E.g., Sandbox runtime: Cloudflare Workers..."
-						rows="5"
-					></textarea>
-
-					<!-- Custom Facts Preset Creator -->
-					<div class="preset-save-section inline-save">
-						<input
-							type="text"
-							bind:value={newFactsPresetName}
-							placeholder="Facts preset name (e.g., Cloudflare D1)"
-							class="preset-name-input"
-						/>
-						<button class="add-preset-btn" onclick={addCustomFactsPreset}>
-							Save current Facts as Preset
-						</button>
-					</div>
-				</div>
-
 				</section>
 
 				<!-- Save Action Bar -->
@@ -673,12 +739,16 @@ Current Budget: 50,000 USD`
 				<div class="sidebar-card">
 					<h4>Detected Placeholders</h4>
 					{#if placeholders.length === 0}
-						<p class="empty-vars">No placeholders detected. Try typing <code>{"{{your_variable}}"}</code> in the system prompt.</p>
+						<p class="empty-vars">
+							No placeholders detected. Try typing <code>{'{{your_variable}}'}</code> in the system prompt.
+						</p>
 					{:else}
 						<div class="placeholders-list">
-							{#each placeholders as placeholder}
+							{#each placeholders as placeholder (placeholder)}
 								<div class="variable-input-row">
-									<label for="var-{placeholder}">{"{{"} {placeholder} {"}}"}</label>
+									<label for="var-{placeholder}"
+										>&lbrace;&lbrace; {placeholder} &rbrace;&rbrace;</label
+									>
 									<input
 										id="var-{placeholder}"
 										type="text"
@@ -704,17 +774,17 @@ Current Budget: 50,000 USD`
 					<div class="testing-header-row">
 						<h4>Sandbox Playground</h4>
 						<div class="tab-toggle-group">
-							<button 
-								class="tab-toggle-btn" 
-								class:active={activeTesterTab === 'single'} 
-								onclick={() => activeTesterTab = 'single'}
+							<button
+								class="tab-toggle-btn"
+								class:active={activeTesterTab === 'single'}
+								onclick={() => (activeTesterTab = 'single')}
 							>
 								Single Sandbox
 							</button>
-							<button 
-								class="tab-toggle-btn" 
-								class:active={activeTesterTab === 'arena'} 
-								onclick={() => activeTesterTab = 'arena'}
+							<button
+								class="tab-toggle-btn"
+								class:active={activeTesterTab === 'arena'}
+								onclick={() => (activeTesterTab = 'arena')}
 							>
 								Split Arena
 							</button>
@@ -722,8 +792,10 @@ Current Budget: 50,000 USD`
 					</div>
 
 					{#if activeTesterTab === 'single'}
-						<p class="empty-vars" style="margin-bottom: 0.75rem;">Test your expanded system prompt with dynamic variable placeholders in real-time.</p>
-						
+						<p class="empty-vars" style="margin-bottom: 0.75rem;">
+							Test your expanded system prompt with dynamic variable placeholders in real-time.
+						</p>
+
 						<div class="testing-chat-window">
 							<div class="testing-chat-messages">
 								{#if testMessages.length === 0}
@@ -731,7 +803,7 @@ Current Budget: 50,000 USD`
 										<span>No test messages. Send a message to run a sandbox trace!</span>
 									</div>
 								{:else}
-									{#each testMessages as msg}
+									{#each testMessages as msg, msgIdx (msgIdx)}
 										<div class="testing-msg {msg.role}">
 											<div class="testing-bubble">
 												{msg.content}
@@ -764,12 +836,19 @@ Current Budget: 50,000 USD`
 							</div>
 						</div>
 						{#if testMessages.length > 0}
-							<button class="clear-testing-btn" onclick={() => testMessages = []} style="margin-top: 0.5rem;">Clear Test Chat</button>
+							<button
+								class="clear-testing-btn"
+								onclick={() => (testMessages = [])}
+								style="margin-top: 0.5rem;">Clear Test Chat</button
+							>
 						{/if}
 					{:else}
 						<!-- Split Arena Arena Mode -->
-						<p class="empty-vars" style="margin-bottom: 0.75rem;">Run up to 3 model variations concurrently side-by-side to compare latency, size, star costs, and output quality.</p>
-						
+						<p class="empty-vars" style="margin-bottom: 0.75rem;">
+							Run up to 3 model variations concurrently side-by-side to compare latency, size, star
+							costs, and output quality.
+						</p>
+
 						<div class="arena-config-bar">
 							<label class="sync-checkbox-label">
 								<input type="checkbox" bind:checked={syncWithEditor} />
@@ -779,17 +858,22 @@ Current Budget: 50,000 USD`
 
 						<!-- Variations configuration list -->
 						<div class="arena-variations-grid">
-							{#each arenaVariations as variation, index}
+							{#each arenaVariations as variation, index (index)}
 								<div class="arena-var-setup-card">
 									<div class="arena-var-header">
 										<span class="arena-var-index">#{index + 1}</span>
-										<input type="text" class="arena-var-name-input" bind:value={variation.name} placeholder="Variation name" />
+										<input
+											type="text"
+											class="arena-var-name-input"
+											bind:value={variation.name}
+											placeholder="Variation name"
+										/>
 									</div>
 									<div class="arena-var-body">
 										<div class="arena-select-group">
 											<label for="model-select-{index}">Select Model</label>
 											<select id="model-select-{index}" bind:value={variation.modelKey}>
-												{#each ARENA_AVAILABLE_MODELS as model}
+												{#each ARENA_AVAILABLE_MODELS as model (model.key)}
 													<option value={model.key}>{model.name}</option>
 												{/each}
 											</select>
@@ -797,12 +881,11 @@ Current Budget: 50,000 USD`
 										{#if !syncWithEditor}
 											<div class="arena-prompt-group">
 												<label for="prompt-textarea-{index}">System Prompt</label>
-												<textarea 
-													id="prompt-textarea-{index}" 
-													bind:value={variation.systemPrompt} 
+												<textarea
+													id="prompt-textarea-{index}"
+													bind:value={variation.systemPrompt}
 													placeholder="Custom system prompt for this variation..."
-													rows="3"
-												></textarea>
+													rows="3"></textarea>
 											</div>
 										{/if}
 									</div>
@@ -819,7 +902,11 @@ Current Budget: 50,000 USD`
 								onkeydown={(e) => e.key === 'Enter' && runArenaTest()}
 								disabled={isTestingArena}
 							/>
-							<button class="run-arena-btn" onclick={runArenaTest} disabled={isTestingArena || !testInput.trim()}>
+							<button
+								class="run-arena-btn"
+								onclick={runArenaTest}
+								disabled={isTestingArena || !testInput.trim()}
+							>
 								{#if isTestingArena}
 									Running...
 								{:else}
@@ -841,7 +928,7 @@ Current Budget: 50,000 USD`
 									<div class="base-selector-helper">
 										<label for="base-select-dropdown">Base model for diffing:</label>
 										<select id="base-select-dropdown" bind:value={diffBaseIndex}>
-											{#each arenaResults as result, idx}
+											{#each arenaResults as result, idx (idx)}
 												<option value={idx}>{result.name} ({result.modelKey})</option>
 											{/each}
 										</select>
@@ -849,13 +936,22 @@ Current Budget: 50,000 USD`
 								</div>
 
 								<div class="arena-results-grid">
-									{#each arenaResults as result, index}
+									{#each arenaResults as result, index (index)}
 										{@const isBase = index === diffBaseIndex}
 										{@const baseText = arenaResults[diffBaseIndex]?.response || ''}
-										{@const maxLatency = Math.max(...arenaResults.map(r => r.latency || 1))}
+										{@const maxLatency = Math.max(...arenaResults.map((r) => r.latency || 1))}
 										{@const percent = Math.round(((result.latency || 0) / maxLatency) * 100)}
-										{@const latencyColor = result.latency < 1000 ? '#10b981' : result.latency < 3000 ? '#f59e0b' : '#ef4444'}
-										<div class="arena-result-card" class:is-base-card={isBase} class:failed-card={!result.success}>
+										{@const latencyColor =
+											result.latency < 1000
+												? '#10b981'
+												: result.latency < 3000
+													? '#f59e0b'
+													: '#ef4444'}
+										<div
+											class="arena-result-card"
+											class:is-base-card={isBase}
+											class:failed-card={!result.success}
+										>
 											<div class="result-card-header">
 												<span class="result-name">{result.name}</span>
 												<span class="result-model-key">{result.modelKey}</span>
@@ -882,7 +978,10 @@ Current Budget: 50,000 USD`
 
 											<!-- Visual latency percentage bar -->
 											<div class="latency-visual-track">
-												<div class="latency-visual-bar" style="width: {percent}%; background-color: {latencyColor};"></div>
+												<div
+													class="latency-visual-bar"
+													style="width: {percent}%; background-color: {latencyColor};"
+												></div>
 											</div>
 
 											<!-- Response content box -->
@@ -893,7 +992,7 @@ Current Budget: 50,000 USD`
 													<pre>{result.response}</pre>
 												{:else}
 													<div class="diff-output-pre">
-														{#each diffWords(baseText, result.response) as token}
+														{#each diffWords(baseText, result.response) as token, tokIdx (tokIdx)}
 															{#if token.type === 'common'}
 																<span>{token.text}</span>
 															{:else if token.type === 'added'}
@@ -981,8 +1080,14 @@ Current Budget: 50,000 USD`
 	}
 
 	@keyframes pulse {
-		0%, 100% { opacity: 0.8; }
-		50% { opacity: 1; transform: scale(1.02); }
+		0%,
+		100% {
+			opacity: 0.8;
+		}
+		50% {
+			opacity: 1;
+			transform: scale(1.02);
+		}
 	}
 
 	.designer-header h2 {
@@ -1049,10 +1154,18 @@ Current Budget: 50,000 USD`
 		border-radius: 50%;
 	}
 
-	.btn-tux .btn-bullet { background-color: #3b82f6; }
-	.btn-eng .btn-bullet { background-color: var(--primary-color); }
-	.btn-writer .btn-bullet { background-color: #ef4444; }
-	.btn-biz .btn-bullet { background-color: #10b981; }
+	.btn-tux .btn-bullet {
+		background-color: #3b82f6;
+	}
+	.btn-eng .btn-bullet {
+		background-color: var(--primary-color);
+	}
+	.btn-writer .btn-bullet {
+		background-color: #ef4444;
+	}
+	.btn-biz .btn-bullet {
+		background-color: #10b981;
+	}
 
 	/* Custom preset styles */
 	.preset-custom-wrapper {
@@ -1293,7 +1406,9 @@ Current Budget: 50,000 USD`
 		font-weight: 600;
 		font-size: 0.9rem;
 		cursor: pointer;
-		transition: background-color 0.2s ease, transform 0.1s ease;
+		transition:
+			background-color 0.2s ease,
+			transform 0.1s ease;
 		margin-left: auto;
 	}
 
@@ -1362,7 +1477,8 @@ Current Budget: 50,000 USD`
 		line-height: 1.5;
 	}
 
-	.empty-vars code, .field-sub code {
+	.empty-vars code,
+	.field-sub code {
 		background: var(--chat-bg);
 		padding: 0.1rem 0.3rem;
 		border-radius: 0.25rem;
@@ -1453,7 +1569,9 @@ Current Budget: 50,000 USD`
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	@media (max-width: 600px) {
@@ -1644,11 +1762,21 @@ Current Budget: 50,000 USD`
 		border-radius: 50%;
 		animation: bounce-tester 1.4s infinite ease-in-out both;
 	}
-	.typing-dots .dot:nth-child(1) { animation-delay: -0.32s; }
-	.typing-dots .dot:nth-child(2) { animation-delay: -0.16s; }
+	.typing-dots .dot:nth-child(1) {
+		animation-delay: -0.32s;
+	}
+	.typing-dots .dot:nth-child(2) {
+		animation-delay: -0.16s;
+	}
 	@keyframes bounce-tester {
-		0%, 80%, 100% { transform: scale(0); }
-		40% { transform: scale(1); }
+		0%,
+		80%,
+		100% {
+			transform: scale(0);
+		}
+		40% {
+			transform: scale(1);
+		}
 	}
 
 	/* Tab Toggle Group for Testing Card */
@@ -1775,13 +1903,15 @@ Current Budget: 50,000 USD`
 		gap: 0.5rem;
 	}
 
-	.arena-select-group, .arena-prompt-group {
+	.arena-select-group,
+	.arena-prompt-group {
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
 	}
 
-	.arena-select-group label, .arena-prompt-group label {
+	.arena-select-group label,
+	.arena-prompt-group label {
 		font-size: 0.7rem;
 		font-weight: 700;
 		opacity: 0.6;
@@ -1916,7 +2046,9 @@ Current Budget: 50,000 USD`
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		transition: border-color 0.2s, box-shadow 0.2s;
+		transition:
+			border-color 0.2s,
+			box-shadow 0.2s;
 	}
 
 	.arena-result-card.is-base-card {

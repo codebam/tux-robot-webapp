@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { marked, type Token } from 'marked';
+	import { marked, type Token, type Tokens } from 'marked';
 	import CodeBlock from './CodeBlock.svelte';
 	import MarkdownTable from './MarkdownTable.svelte';
 
@@ -91,7 +91,7 @@
 			</h4>
 		{/if}
 	{:else if token.type === 'table'}
-		<MarkdownTable {token} {renderToken} />
+		<MarkdownTable {renderToken} token={token as Tokens.Table} />
 	{:else if token.type === 'space'}
 		<br />
 	{:else if token.type === 'text'}

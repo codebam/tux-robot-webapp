@@ -1,5 +1,6 @@
 import { type RequestHandler } from '@sveltejs/kit';
 import { authenticate } from '$lib/server/auth';
+import type { Environment } from '$lib/server/chatUtils';
 
 /** Poll interval for the balance / sandbox-log feed. */
 const POLL_MS = 3000;
@@ -15,7 +16,7 @@ export const GET: RequestHandler = async ({ url, platform, request, cookies }) =
 		return new Response('Platform not found', { status: 500 });
 	}
 
-	const env = platform.env as any;
+	const env = platform.env as Environment;
 	const session = await authenticate(env, { request, url, cookies });
 	if (!session) return new Response('Unauthorized', { status: 401 });
 

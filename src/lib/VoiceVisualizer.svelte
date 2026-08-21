@@ -2,15 +2,15 @@
 	import { onMount, onDestroy } from 'svelte';
 
 	let {
-		userId = null,
 		initData = '',
 		messages = $bindable([]),
+		// eslint-disable no-useless-assignment
 		balance = $bindable(null),
 		error = $bindable(null),
 		isStreaming = $bindable(false),
+		// eslint-enable no-useless-assignment
 		onMessageAdded = () => {}
 	}: {
-		userId: number | null;
 		initData: string;
 		messages: Array<{ role: 'user' | 'bot'; content: string }>;
 		balance: number | null;
@@ -115,7 +115,7 @@
 
 			for (let i = 0; i < points; i++) {
 				const angle = (i / points) * Math.PI * 2;
-				let offset = 0;
+				let offset: number;
 
 				if (visualizerState === 'recording' && analyser && dataArray.length > 0) {
 					analyser.getByteFrequencyData(dataArray);
@@ -182,7 +182,7 @@
 			ctx.save();
 			ctx.fillStyle = '#ffffff';
 			ctx.shadowBlur = 0;
-			
+
 			if (visualizerState === 'recording') {
 				// Red stop square
 				const size = baseRadius * 0.35;
@@ -223,14 +223,15 @@
 	}
 
 	async function startRecording() {
-		error = null;
+		if (error) error = null;
 		audioChunks = [];
 		try {
 			// Ask for microphone permissions
 			micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-			
+
 			// Setup AudioContext & AnalyserNode for Canvas wave
-			audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+			const windowWithWebkit = window as Window & { webkitAudioContext?: typeof AudioContext };
+			audioContext = new (window.AudioContext || windowWithWebkit.webkitAudioContext)();
 			const source = audioContext.createMediaStreamSource(micStream);
 			analyser = audioContext.createAnalyser();
 			analyser.fftSize = 256;
@@ -244,7 +245,7 @@
 			} else if (MediaRecorder.isTypeSupported('audio/ogg')) {
 				options = { mimeType: 'audio/ogg' };
 			}
-			
+
 			mediaRecorder = new MediaRecorder(micStream, options);
 			mediaRecorder.ondataavailable = (event) => {
 				if (event.data.size > 0) {
@@ -260,7 +261,7 @@
 			mediaRecorder.start();
 			visualizerState = 'recording';
 			statusText = 'Listening... Tap to complete';
-		} catch (err: any) {
+		} catch (err) {
 			console.error('[VoiceVisualizer] Mic Access Denied:', err);
 			error = 'Microphone access is required to speak to the Voice pipeline.';
 			visualizerState = 'idle';
@@ -289,6 +290,7 @@
 	}
 
 	async function submitVoicePayload(audioBlob: Blob) {
+		if (isStreaming) return;
 		visualizerState = 'processing';
 		statusText = 'Transcribing...';
 		isStreaming = true;
@@ -306,16 +308,17 @@
 
 			const headerBalance = res.headers.get('x-new-balance');
 			if (headerBalance) {
-				balance = parseInt(headerBalance);
+				const nextBalance = parseInt(headerBalance);
+				if (nextBalance !== balance) balance = nextBalance;
 			}
 
 			if (!res.ok) {
-				const errData = await res.json() as any;
+				const errData = (await res.json()) as { error?: string };
 				throw new Error(errData.error || 'Failed to process voice pipeline.');
 			}
 
-			const data = await res.json() as any;
-			
+			const data = (await res.json()) as { transcription: string; response: string };
+
 			// Append user voice transcription and AI edge response to the chat feed
 			messages = [
 				...messages,
@@ -326,9 +329,9 @@
 
 			// Play back synthesis audio
 			speakTTS(data.response);
-		} catch (err: any) {
+		} catch (err) {
 			console.error('[VoiceVisualizer] Pipeline Error:', err);
-			error = err.message || 'Voice connection failed.';
+			error = (err instanceof Error ? err.message : String(err)) || 'Voice connection failed.';
 			visualizerState = 'idle';
 			statusText = '';
 		} finally {
@@ -344,15 +347,15 @@
 		}
 
 		window.speechSynthesis.cancel();
-		
+
 		// Strip markdown elements for cleaner speech synthesis output
 		const cleanText = text
-			.replace(/[\#\*\_\`\[\]\-\+\>]/g, ' ')
+			.replace(/[#*_`[\]\-+>]/g, ' ')
 			.replace(/\(.*?\)/g, ' ')
 			.trim();
 
 		utterance = new SpeechSynthesisUtterance(cleanText);
-		
+
 		// Configure premium speed and pitch
 		utterance.rate = 1.05;
 		utterance.pitch = 1.0;
@@ -387,12 +390,16 @@
 
 <div class="voice-node-container">
 	<div class="visualizer-wrapper">
-		<canvas 
-			bind:this={canvas} 
-			width="140" 
-			height="140" 
+		<canvas
+			bind:this={canvas}
+			width="140"
+			height="140"
 			onclick={toggleVoice}
-			title={visualizerState === 'idle' ? 'Start Voice Command' : visualizerState === 'recording' ? 'Finish Recording' : 'Stop Playback'}
+			title={visualizerState === 'idle'
+				? 'Start Voice Command'
+				: visualizerState === 'recording'
+					? 'Finish Recording'
+					: 'Stop Playback'}
 			class="visualizer-canvas state-{visualizerState}"
 		></canvas>
 	</div>
@@ -500,12 +507,24 @@
 	}
 
 	@keyframes slide-up {
-		from { opacity: 0; transform: translateY(6px); }
-		to { opacity: 1; transform: translateY(0); }
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	@keyframes pulse-dot {
-		from { transform: scale(0.85); opacity: 0.6; }
-		to { transform: scale(1.15); opacity: 1; }
+		from {
+			transform: scale(0.85);
+			opacity: 0.6;
+		}
+		to {
+			transform: scale(1.15);
+			opacity: 1;
+		}
 	}
 </style>

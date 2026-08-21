@@ -20,19 +20,19 @@ describe('PromptDesigner.svelte', () => {
 				return Promise.resolve({
 					ok: true,
 					json: () => Promise.resolve(mockPromptData)
-				} as any);
+				} as unknown as Response);
 			}
 			return Promise.resolve({
 				ok: true,
 				json: () => Promise.resolve({})
-			} as any);
+			} as unknown as Response);
 		});
 
 		vi.stubGlobal('fetch', mockFetch);
 	});
 
 	it('renders tabs and switches to Split Arena mode', async () => {
-		const { container } = render(PromptDesigner, {
+		const { container } = await render(PromptDesigner, {
 			userId: 12345,
 			initData: 'user_id=12345'
 		});

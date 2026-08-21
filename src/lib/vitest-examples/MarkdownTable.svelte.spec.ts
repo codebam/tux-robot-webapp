@@ -13,7 +13,7 @@ describe('Markdown Table & Chart Rendering', () => {
 | February | 150 | 300 |
 `;
 
-		const { container } = render(Markdown, { content: tableMarkdown });
+		const { container } = await render(Markdown, { content: tableMarkdown });
 
 		// 1. Tabular view should render by default
 		const table = page.getByRole('table');
@@ -55,7 +55,7 @@ describe('Markdown Table & Chart Rendering', () => {
 | B    | €850   | -10%   | 45.2   |
 `;
 
-		const { container } = render(Markdown, { content: complexMarkdown });
+		const { container } = await render(Markdown, { content: complexMarkdown });
 
 		// Toggle to Bar Chart view
 		const barChartButton = page.getByText('Bar Chart');
@@ -76,7 +76,7 @@ describe('Markdown Table & Chart Rendering', () => {
 | Bananas  | 15      | twenty  |
 `;
 
-		const { container } = render(Markdown, { content: textMarkdown });
+		await render(Markdown, { content: textMarkdown });
 
 		// Neither Value A (50% numeric) nor Value B (50% numeric) meets the 70% threshold.
 		// So chart toggles should NOT render.
@@ -94,7 +94,7 @@ describe('Markdown Table & Chart Rendering', () => {
 | January | 100 |
 `;
 
-		const { container } = render(Markdown, { content: singleRowMarkdown });
+		await render(Markdown, { content: singleRowMarkdown });
 
 		const barChartButton = page.getByText('Bar Chart');
 		await expect.element(barChartButton).not.toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('Markdown Table & Chart Rendering', () => {
 | February | 150 |
 `;
 
-		const { container } = render(Markdown, { content: hoverMarkdown });
+		const { container } = await render(Markdown, { content: hoverMarkdown });
 
 		// Toggle to Bar Chart view
 		const barChartButton = page.getByText('Bar Chart');
@@ -120,7 +120,7 @@ describe('Markdown Table & Chart Rendering', () => {
 		expect(rects.length).toBe(2);
 
 		const firstRect = rects[0];
-		
+
 		// Tooltip should not exist initially
 		let tooltip = container.querySelector('.chart-tooltip');
 		expect(tooltip).toBeNull();
@@ -150,4 +150,3 @@ describe('Markdown Table & Chart Rendering', () => {
 		expect(tooltip).toBeNull();
 	});
 });
-

@@ -7,6 +7,7 @@ import {
 	AVAILABLE_MODELS,
 	DEFAULT_MODEL,
 	SYSTEM_PROMPTS,
+	type AiResponse,
 	extractText,
 	extractThinking,
 	extractReasoning
@@ -24,7 +25,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const userId = session.userId;
 
 	const prompt = body.prompt;
-	if (!prompt || typeof prompt !== 'string') return json({ error: 'Prompt is required' }, { status: 400 });
+	if (!prompt || typeof prompt !== 'string')
+		return json({ error: 'Prompt is required' }, { status: 400 });
 
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
 	const balance = await getBalance(userId, env.CONVERSATION_HISTORY);
@@ -63,7 +65,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 						);
 					}
 				} else {
-					const currentModel = (await env.CONVERSATION_HISTORY.get<string>(modelKey)) ?? DEFAULT_MODEL;
+					const currentModel =
+						(await env.CONVERSATION_HISTORY.get<string>(modelKey)) ?? DEFAULT_MODEL;
 					const modelList = Object.entries(AVAILABLE_MODELS)
 						.map(([name, cfg]) => `- ${name} (${cfg.cost} Stars)`)
 						.join('\n');
@@ -103,7 +106,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 						);
 					}
 				} else {
-					const currentPrompt = (await env.CONVERSATION_HISTORY.get(promptKey)) || SYSTEM_PROMPTS.TUX_ROBOT;
+					const currentPrompt =
+						(await env.CONVERSATION_HISTORY.get(promptKey)) || SYSTEM_PROMPTS.TUX_ROBOT;
 					return json(
 						{ message: `Current system prompt:\n\n${currentPrompt}`, type: 'command' },
 						{ headers: commonHeaders }
@@ -116,7 +120,10 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 					let factsValue = args.join(' ');
 					if (factsValue === 'reset' || factsValue === '""' || factsValue === "''") {
 						await env.CONVERSATION_HISTORY.delete(factsKey);
-						return json({ message: 'Business facts cleared.', type: 'command' }, { headers: commonHeaders });
+						return json(
+							{ message: 'Business facts cleared.', type: 'command' },
+							{ headers: commonHeaders }
+						);
 					} else {
 						if (
 							(factsValue.startsWith('"') && factsValue.endsWith('"')) ||
@@ -141,7 +148,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		}
 	}
 
-	const modelPreference = (await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? DEFAULT_MODEL;
+	const modelPreference =
+		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? DEFAULT_MODEL;
 	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS[DEFAULT_MODEL];
 
 	const history = await historyManager.getHistory(userId);
@@ -189,11 +197,13 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			throw new Error(`AI Workflow error: ${response.status} ${response.statusText}`);
 		}
 
-		const updatedHeaders = { 'x-new-balance': response.headers.get('x-new-balance') ?? String(balance) };
+		const updatedHeaders = {
+			'x-new-balance': response.headers.get('x-new-balance') ?? String(balance)
+		};
 
 		const contentType = response.headers.get('Content-Type');
 		if (contentType?.includes('application/json')) {
-			const data = (await response.json()) as any;
+			const data = (await response.json()) as AiResponse;
 			const content = extractText(data);
 			const thinking = extractThinking(data);
 			const reasoning = extractReasoning(data);

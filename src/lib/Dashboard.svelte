@@ -1,7 +1,10 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 
-	interface ChatMessage { role: 'user' | 'bot'; content: string; }
+	interface ChatMessage {
+		role: 'user' | 'bot';
+		content: string;
+	}
 
 	let {
 		userId = null,
@@ -9,7 +12,8 @@
 		balance = $bindable(0),
 		messages = [],
 		logs = {
-			stdout: 'Initializing telemetry listener...\nConnection: Standby\nWaiting for active Sandbox tasks...',
+			stdout:
+				'Initializing telemetry listener...\nConnection: Standby\nWaiting for active Sandbox tasks...',
 			stderr: '',
 			timestamp: '',
 			command: 'idle'
@@ -32,7 +36,7 @@
 
 	// Balance visual transition ticker
 	let displayedBalance = $state(0);
-	
+
 	$effect(() => {
 		const target = balance ?? 0;
 		if (displayedBalance !== target) {
@@ -55,17 +59,20 @@
 				}
 			});
 			if (res.ok) {
-				const data = (await res.json()) as any;
+				const data = (await res.json()) as {
+					logs?: { stdout: string; stderr: string; timestamp: string; command: string };
+				};
 				if (data.logs) {
 					logs = data.logs;
 					logsError = null;
 				}
 			} else {
-				const err = (await res.json()) as any;
+				const err = (await res.json()) as { error?: string };
 				logsError = err.error || 'Failed to fetch logs';
 			}
-		} catch (err: any) {
-			logsError = err.message || 'Network exception connecting to telemetry api';
+		} catch (err) {
+			logsError =
+				err instanceof Error ? err.message : 'Network exception connecting to telemetry api';
 		} finally {
 			loadingLogs = false;
 		}
@@ -118,9 +125,9 @@
 			let runningBal = 200;
 			mockEvents.forEach((ev, i) => {
 				runningBal -= ev.cost;
-				const x = 50 + (i * (700 / (mockEvents.length - 1 || 1)));
-				const yBalance = 180 - ((runningBal / 200) * 150);
-				const yCost = 180 - ((ev.cost / 10) * 80);
+				const x = 50 + i * (700 / (mockEvents.length - 1 || 1));
+				const yBalance = 180 - (runningBal / 200) * 150;
+				const yCost = 180 - (ev.cost / 10) * 80;
 				points.push({
 					x,
 					yBalance,
@@ -140,7 +147,11 @@
 			if (msg.content.includes('[Analyze uploaded file:')) {
 				cost = 5;
 				typeLabel = 'File Upload';
-			} else if (msg.content.includes('python') || msg.content.includes('import ') || msg.content.includes('def ')) {
+			} else if (
+				msg.content.includes('python') ||
+				msg.content.includes('import ') ||
+				msg.content.includes('def ')
+			) {
 				cost = 3;
 				typeLabel = 'Sandbox Run';
 			}
@@ -151,7 +162,7 @@
 		let bal = currentBal + visibleEvents.reduce((acc, ev) => acc + ev.cost, 0);
 		points.push({
 			x: 50,
-			yBalance: 180 - ((bal / 200) * 150),
+			yBalance: 180 - (bal / 200) * 150,
 			yCost: 180,
 			balance: bal,
 			cost: 0,
@@ -160,9 +171,9 @@
 
 		visibleEvents.forEach((ev, i) => {
 			bal -= ev.cost;
-			const x = 50 + ((i + 1) * (700 / visibleEvents.length));
-			const yBalance = 180 - ((bal / 200) * 150);
-			const yCost = 180 - ((ev.cost / 10) * 80);
+			const x = 50 + (i + 1) * (700 / visibleEvents.length);
+			const yBalance = 180 - (bal / 200) * 150;
+			const yCost = 180 - (ev.cost / 10) * 80;
 			points.push({
 				x,
 				yBalance,
@@ -178,7 +189,9 @@
 
 	let balanceLinePath = $derived.by(() => {
 		if (chartDataPoints.length < 2) return '';
-		return chartDataPoints.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.yBalance}`).join(' ');
+		return chartDataPoints
+			.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x} ${pt.yBalance}`)
+			.join(' ');
 	});
 
 	let balanceAreaPath = $derived.by(() => {
@@ -209,7 +222,9 @@
 			<div class="card-glow"></div>
 			<div class="card-icon">
 				<svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
-					<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+					<path
+						d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+					/>
 				</svg>
 			</div>
 			<div class="stat-content">
@@ -223,7 +238,9 @@
 		<div class="stat-card">
 			<div class="card-icon blue">
 				<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
-					<path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z" />
+					<path
+						d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"
+					/>
 				</svg>
 			</div>
 			<div class="stat-content">
@@ -237,7 +254,9 @@
 		<div class="stat-card">
 			<div class="card-icon green">
 				<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
-					<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" />
+					<path
+						d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"
+					/>
 				</svg>
 			</div>
 			<div class="stat-content">
@@ -256,7 +275,8 @@
 		<div class="section-header">
 			<h3>Star Ledger Usage Tracker</h3>
 			<div class="chart-legend">
-				<span class="legend-item"><span class="legend-dot balance-dot"></span> Balance (Stars)</span>
+				<span class="legend-item"><span class="legend-dot balance-dot"></span> Balance (Stars)</span
+				>
 				<span class="legend-item"><span class="legend-dot cost-dot"></span> Transaction Cost</span>
 			</div>
 		</div>
@@ -264,38 +284,89 @@
 			<svg viewBox="0 0 800 240" class="usage-chart">
 				<defs>
 					<linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
-						<stop offset="0%" stop-color="var(--primary-color)" stop-opacity="0.25"/>
-						<stop offset="100%" stop-color="var(--primary-color)" stop-opacity="0.00"/>
+						<stop offset="0%" stop-color="var(--primary-color)" stop-opacity="0.25" />
+						<stop offset="100%" stop-color="var(--primary-color)" stop-opacity="0.00" />
 					</linearGradient>
 					<linearGradient id="costGrad" x1="0" y1="0" x2="0" y2="1">
-						<stop offset="0%" stop-color="#ef4444" stop-opacity="0.15"/>
-						<stop offset="100%" stop-color="#ef4444" stop-opacity="0.00"/>
+						<stop offset="0%" stop-color="#ef4444" stop-opacity="0.15" />
+						<stop offset="100%" stop-color="#ef4444" stop-opacity="0.00" />
 					</linearGradient>
 				</defs>
 
-				<line x1="50" y1="30" x2="750" y2="30" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
-				<line x1="50" y1="80" x2="750" y2="80" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
-				<line x1="50" y1="130" x2="750" y2="130" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
-				<line x1="50" y1="180" x2="750" y2="180" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4"/>
+				<line
+					x1="50"
+					y1="30"
+					x2="750"
+					y2="30"
+					stroke="rgba(255,255,255,0.05)"
+					stroke-dasharray="4"
+				/>
+				<line
+					x1="50"
+					y1="80"
+					x2="750"
+					y2="80"
+					stroke="rgba(255,255,255,0.05)"
+					stroke-dasharray="4"
+				/>
+				<line
+					x1="50"
+					y1="130"
+					x2="750"
+					y2="130"
+					stroke="rgba(255,255,255,0.05)"
+					stroke-dasharray="4"
+				/>
+				<line
+					x1="50"
+					y1="180"
+					x2="750"
+					y2="180"
+					stroke="rgba(255,255,255,0.05)"
+					stroke-dasharray="4"
+				/>
 
 				<text x="35" y="35" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">200</text>
 				<text x="35" y="85" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">150</text>
-				<text x="35" y="135" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">100</text>
+				<text x="35" y="135" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">100</text
+				>
 				<text x="35" y="185" fill="rgba(255,255,255,0.3)" font-size="10" text-anchor="end">50</text>
 
 				{#if chartDataPoints.length > 1}
-					<path d={balanceAreaPath} fill="url(#balanceGrad)"/>
-					<path d={balanceLinePath} fill="none" stroke="var(--primary-color)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-					
-					<path d={costAreaPath} fill="url(#costGrad)"/>
-					<path d={costLinePath} fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 2"/>
+					<path d={balanceAreaPath} fill="url(#balanceGrad)" />
+					<path
+						d={balanceLinePath}
+						fill="none"
+						stroke="var(--primary-color)"
+						stroke-width="3"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+
+					<path d={costAreaPath} fill="url(#costGrad)" />
+					<path
+						d={costLinePath}
+						fill="none"
+						stroke="#ef4444"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-dasharray="2 2"
+					/>
 				{:else}
-					<text x="400" y="110" fill="rgba(255,255,255,0.35)" font-size="14" font-weight="500" text-anchor="middle">
+					<text
+						x="400"
+						y="110"
+						fill="rgba(255,255,255,0.35)"
+						font-size="14"
+						font-weight="500"
+						text-anchor="middle"
+					>
 						No usage events logged. Send messages to populate ledger tracker.
 					</text>
 				{/if}
 
-				{#each chartDataPoints as pt, index}
+				{#each chartDataPoints as pt, index (index)}
 					<circle
 						cx={pt.x}
 						cy={pt.yBalance}
@@ -303,8 +374,8 @@
 						fill="var(--primary-color)"
 						stroke="var(--main-bg)"
 						stroke-width="2"
-						onmouseenter={() => hoverIndex = index}
-						onmouseleave={() => hoverIndex = null}
+						onmouseenter={() => (hoverIndex = index)}
+						onmouseleave={() => (hoverIndex = null)}
 						style="cursor: pointer; transition: r 0.2s;"
 					/>
 					<circle
@@ -314,8 +385,8 @@
 						fill="#ef4444"
 						stroke="var(--main-bg)"
 						stroke-width="1.5"
-						onmouseenter={() => hoverIndex = index}
-						onmouseleave={() => hoverIndex = null}
+						onmouseenter={() => (hoverIndex = index)}
+						onmouseleave={() => (hoverIndex = null)}
 						style="cursor: pointer; transition: r 0.2s;"
 					/>
 				{/each}
@@ -323,7 +394,10 @@
 
 			{#if hoverIndex !== null && chartDataPoints[hoverIndex]}
 				{@const activePt = chartDataPoints[hoverIndex]}
-				<div class="chart-tooltip" style="left: {(activePt.x / 800) * 100}%; top: {((activePt.yBalance - 35) / 240) * 100}%;">
+				<div
+					class="chart-tooltip"
+					style="left: {(activePt.x / 800) * 100}%; top: {((activePt.yBalance - 35) / 240) * 100}%;"
+				>
 					<div class="tooltip-title">{activePt.label}</div>
 					<div class="tooltip-row">
 						<span class="tooltip-label">Balance:</span>
@@ -349,7 +423,9 @@
 					{/if}
 					<button class="icon-btn" onclick={fetchLogs} title="Refresh Logs">
 						<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-							<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+							<path
+								d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+							/>
 						</svg>
 					</button>
 				</div>
@@ -365,15 +441,18 @@
 				</div>
 				<div class="terminal-body">
 					<div class="terminal-prompt">
-						<span class="prompt-user">tuxrobot@sandbox</span>:<span class="prompt-dir">~/workspace</span>$
+						<span class="prompt-user">tuxrobot@sandbox</span>:<span class="prompt-dir"
+							>~/workspace</span
+						>$
 						<span class="prompt-cmd">{logs.command || 'idle'}</span>
 					</div>
-					
+
 					{#if logsError}
 						<div class="terminal-error">Telemetry Error: {logsError}</div>
 					{/if}
 
-					<pre class="stdout">{logs.stdout || 'Command completed successfully with empty output.'}</pre>
+					<pre class="stdout">{logs.stdout ||
+							'Command completed successfully with empty output.'}</pre>
 
 					{#if logs.stderr}
 						<pre class="stderr">{logs.stderr}</pre>
@@ -387,19 +466,23 @@
 			<div class="section-header">
 				<h3>Recent Chat Snapshots</h3>
 			</div>
-			
+
 			<div class="history-list">
 				{#if messages.length === 0}
 					<div class="empty-history">
 						<p>No active message logs found for this session.</p>
 					</div>
 				{:else}
-					{#each messages.slice(-5).reverse() as msg, index}
+					{#each messages.slice(-5).reverse() as msg, index (index)}
 						<div class="history-card {msg.role}">
 							<div class="card-meta">
-								<span class="role-badge">{msg.role === 'user' ? 'User Prompt' : 'AI Assistant'}</span>
+								<span class="role-badge"
+									>{msg.role === 'user' ? 'User Prompt' : 'AI Assistant'}</span
+								>
 							</div>
-							<p class="card-content">{msg.content.slice(0, 160)}{msg.content.length > 160 ? '...' : ''}</p>
+							<p class="card-content">
+								{msg.content.slice(0, 160)}{msg.content.length > 160 ? '...' : ''}
+							</p>
 						</div>
 					{/each}
 				{/if}
@@ -443,7 +526,9 @@
 		border-radius: var(--r-md);
 		box-shadow: var(--shadow-xs);
 		overflow: hidden;
-		transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+		transition:
+			border-color var(--dur) var(--ease),
+			box-shadow var(--dur) var(--ease);
 	}
 
 	.stat-card:hover {
@@ -465,7 +550,7 @@
 	.stat-card.gold-pulse {
 		border-color: rgba(245, 158, 11, 0.2);
 	}
-	
+
 	.stat-card.gold-pulse:hover {
 		border-color: rgba(245, 158, 11, 0.5);
 		box-shadow: 0 8px 30px rgba(245, 158, 11, 0.08);
@@ -659,9 +744,15 @@
 		border-radius: 50%;
 	}
 
-	.circle.red { background: #ef4444; }
-	.circle.yellow { background: #f59e0b; }
-	.circle.green { background: #10b981; }
+	.circle.red {
+		background: #ef4444;
+	}
+	.circle.yellow {
+		background: #f59e0b;
+	}
+	.circle.green {
+		background: #10b981;
+	}
 
 	.terminal-title {
 		flex: 1;
@@ -875,7 +966,7 @@
 		border-radius: 0.5rem;
 		font-size: 0.75rem;
 		color: white;
-		box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+		box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
 		pointer-events: none;
 		transform: translate(-50%, -100%);
 		display: flex;
@@ -885,8 +976,14 @@
 		animation: fadeIn 0.15s ease-out;
 	}
 	@keyframes fadeIn {
-		from { opacity: 0; transform: translate(-50%, -90%); }
-		to { opacity: 1; transform: translate(-50%, -100%); }
+		from {
+			opacity: 0;
+			transform: translate(-50%, -90%);
+		}
+		to {
+			opacity: 1;
+			transform: translate(-50%, -100%);
+		}
 	}
 	.tooltip-title {
 		font-weight: 700;

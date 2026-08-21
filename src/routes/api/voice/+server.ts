@@ -8,6 +8,7 @@ import {
 	VOICE_SURCHARGE_STARS,
 	type Environment,
 	type Task,
+	type AiResponse,
 	extractText
 } from '$lib/server/chatUtils';
 import { authenticate } from '$lib/server/auth';
@@ -35,7 +36,8 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const historyManager = new HistoryManager(env.CONVERSATION_HISTORY);
 	const balance = await getBalance(userId, env.CONVERSATION_HISTORY);
 
-	const modelPreference = (await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? DEFAULT_MODEL;
+	const modelPreference =
+		(await env.CONVERSATION_HISTORY.get<string>(`model:${userId}`)) ?? DEFAULT_MODEL;
 	const modelConfig = AVAILABLE_MODELS[modelPreference] ?? AVAILABLE_MODELS[DEFAULT_MODEL];
 
 	// The model cost is charged by the bot worker; only the transcription
@@ -49,7 +51,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		);
 	}
 
-	let transcriptionText = '';
+	let transcriptionText: string;
 
 	try {
 		// Cache transcriptions by audio hash so repeats are free.
@@ -69,18 +71,26 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 			transcriptionText = transcription.text || '';
 			if (transcriptionText) {
-				await env.CONVERSATION_HISTORY.put(cacheKey, transcriptionText, { expirationTtl: 86400 * 7 });
+				await env.CONVERSATION_HISTORY.put(cacheKey, transcriptionText, {
+					expirationTtl: 86400 * 7
+				});
 			}
 		} else {
 			console.log(`[Voice API] Whisper Cache HIT. Using cached transcription.`);
 		}
-	} catch (e: any) {
+	} catch (e) {
 		console.error('[Voice API] Whisper Transcription Failed:', e);
-		return json({ error: `Transcription failed: ${e.message || String(e)}` }, { status: 500 });
+		return json(
+			{ error: `Transcription failed: ${e instanceof Error ? e.message : String(e)}` },
+			{ status: 500 }
+		);
 	}
 
 	if (!transcriptionText.trim()) {
-		return json({ error: 'No speech could be detected or transcribed in the audio clip.' }, { status: 400 });
+		return json(
+			{ error: 'No speech could be detected or transcribed in the audio clip.' },
+			{ status: 400 }
+		);
 	}
 
 	// Bill the transcription only once it has actually produced text, so a
@@ -113,7 +123,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		stream: false
 	};
 
-	let aiText = '';
+	let aiText: string;
 
 	try {
 		const response = await env.AI_WORKFLOW.fetch('https://workflow.local/workflow', {
@@ -135,7 +145,7 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 		const newBalance = Number(response.headers.get('x-new-balance') ?? surchargeResult.balance);
 
-		const data = (await response.json()) as any;
+		const data = (await response.json()) as AiResponse;
 		aiText = extractText(data);
 
 		if (aiText) {
@@ -146,8 +156,11 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			{ transcription: transcriptionText, response: aiText, newBalance },
 			{ headers: { 'x-new-balance': String(newBalance) } }
 		);
-	} catch (e: any) {
+	} catch (e) {
 		console.error('[Voice API] AI Completion failed:', e);
-		return json({ error: `AI completion failed: ${e.message || String(e)}` }, { status: 500 });
+		return json(
+			{ error: `AI completion failed: ${e instanceof Error ? e.message : String(e)}` },
+			{ status: 500 }
+		);
 	}
 };

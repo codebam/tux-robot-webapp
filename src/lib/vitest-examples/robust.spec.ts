@@ -28,7 +28,7 @@ describe('Robust Codebase Behaviors', () => {
 		it('saves transaction entries in KV and trims to 50', async () => {
 			const mockStore: Record<string, string> = {};
 			const mockKv = {
-				get: vi.fn(async (key: string, type: string) => {
+				get: vi.fn(async (key: string, _type: string) => {
 					if (mockStore[key]) {
 						return JSON.parse(mockStore[key]);
 					}
@@ -68,42 +68,50 @@ describe('Robust Codebase Behaviors', () => {
 			expect(extractText(textOnly)).toBe('Just plain text');
 
 			const choiceStyle = {
-				choices: [{
-					message: {
-						content: 'Nested message text'
+				choices: [
+					{
+						message: {
+							content: 'Nested message text'
+						}
 					}
-				}]
+				]
 			};
 			expect(extractText(choiceStyle)).toBe('Nested message text');
 
 			const deltaStyle = {
-				choices: [{
-					delta: {
-						content: 'Streaming chunk'
+				choices: [
+					{
+						delta: {
+							content: 'Streaming chunk'
+						}
 					}
-				}]
+				]
 			};
 			expect(extractText(deltaStyle)).toBe('Streaming chunk');
 		});
 
 		it('extracts thinking block content', () => {
 			const thinkingPayload = {
-				choices: [{
-					message: {
-						thought: 'Logical processing here...'
+				choices: [
+					{
+						message: {
+							thought: 'Logical processing here...'
+						}
 					}
-				}]
+				]
 			};
 			expect(extractThinking(thinkingPayload)).toBe('Logical processing here...');
 		});
 
 		it('extracts reasoning content', () => {
 			const reasoningPayload = {
-				choices: [{
-					delta: {
-						reasoning_content: 'Reasoning process'
+				choices: [
+					{
+						delta: {
+							reasoning_content: 'Reasoning process'
+						}
 					}
-				}]
+				]
 			};
 			expect(extractReasoning(reasoningPayload)).toBe('Reasoning process');
 		});

@@ -1,5 +1,12 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { AVAILABLE_MODELS, getBalance, type Environment, type Task, extractText } from '$lib/server/chatUtils';
+import {
+	AVAILABLE_MODELS,
+	getBalance,
+	type Environment,
+	type Task,
+	type AiResponse,
+	extractText
+} from '$lib/server/chatUtils';
 import { authenticate } from '$lib/server/auth';
 
 /** Each variation is a full generation; cap the fan-out per request. */
@@ -26,12 +33,16 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 
 	const prompt = body.prompt;
 	const variations = body.variations;
-	if (!prompt || typeof prompt !== 'string') return json({ error: 'Prompt is required' }, { status: 400 });
+	if (!prompt || typeof prompt !== 'string')
+		return json({ error: 'Prompt is required' }, { status: 400 });
 	if (!variations || !Array.isArray(variations) || variations.length === 0) {
 		return json({ error: 'Variations are required' }, { status: 400 });
 	}
 	if (variations.length > MAX_VARIATIONS) {
-		return json({ error: `At most ${MAX_VARIATIONS} variations can be compared at once.` }, { status: 400 });
+		return json(
+			{ error: `At most ${MAX_VARIATIONS} variations can be compared at once.` },
+			{ status: 400 }
+		);
 	}
 
 	const balance = await getBalance(userId, env.CONVERSATION_HISTORY);
@@ -50,7 +61,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	const totalCost = preparedVariations.reduce((sum, v) => sum + v.cost, 0);
 	if (balance < totalCost) {
 		return json(
-			{ error: `Insufficient balance. Arena run requires ${totalCost} Stars, but you only have ${balance} Stars.` },
+			{
+				error: `Insufficient balance. Arena run requires ${totalCost} Stars, but you only have ${balance} Stars.`
+			},
 			{ status: 403 }
 		);
 	}
@@ -92,12 +105,12 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 				throw new Error(`AI error: ${res.status} ${res.statusText}`);
 			} else {
 				latestBalance = Number(res.headers.get('x-new-balance') ?? latestBalance);
-				const data = (await res.json()) as any;
+				const data = (await res.json()) as AiResponse;
 				responseText = extractText(data);
 			}
-		} catch (e: any) {
+		} catch (e) {
 			console.error(`[Arena] Failed variation ${v.name}:`, e);
-			error = e.message || String(e);
+			error = e instanceof Error ? e.message : String(e);
 		}
 
 		results.push({

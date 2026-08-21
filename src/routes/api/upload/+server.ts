@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { UPLOAD_COST_STARS } from '$lib/server/chatUtils';
+import { UPLOAD_COST_STARS, type Environment } from '$lib/server/chatUtils';
 import { authenticate } from '$lib/server/auth';
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -14,7 +14,7 @@ function isSafeFileName(name: string): boolean {
 
 export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 	if (!platform) return json({ error: 'Platform not found' }, { status: 500 });
-	const env = platform.env as any;
+	const env = platform.env as Environment;
 
 	try {
 		const formData = await request.formData();
@@ -79,8 +79,9 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 			},
 			{ headers: { 'x-new-balance': String(newBalance) } }
 		);
-	} catch (e: any) {
+	} catch (e) {
 		console.error('[Upload API Error]:', e);
-		return json({ error: `Upload failed: ${e.message || String(e)}` }, { status: 500 });
+		const message = e instanceof Error ? e.message : String(e);
+		return json({ error: `Upload failed: ${message}` }, { status: 500 });
 	}
 };

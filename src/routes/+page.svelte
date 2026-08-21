@@ -1,9 +1,3 @@
-<svelte:head>
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-</svelte:head>
-
 <script lang="ts">
 	import { onMount, tick, untrack } from 'svelte';
 	import type { PageData } from './$types';
@@ -13,7 +7,10 @@
 	import PromptDesigner from '$lib/PromptDesigner.svelte';
 	import VoiceVisualizer from '$lib/VoiceVisualizer.svelte';
 
-	interface ChatMessage { role: 'user' | 'bot' | 'assistant'; content: string; }
+	interface ChatMessage {
+		role: 'user' | 'bot' | 'assistant';
+		content: string;
+	}
 	interface BalanceResponse {
 		error?: string;
 		balance?: number;
@@ -62,7 +59,8 @@
 		timestamp: string;
 		command: string;
 	}>({
-		stdout: 'Initializing telemetry listener...\nConnection: Standby\nWaiting for active Sandbox tasks...',
+		stdout:
+			'Initializing telemetry listener...\nConnection: Standby\nWaiting for active Sandbox tasks...',
 		stderr: '',
 		timestamp: '',
 		command: 'idle'
@@ -301,7 +299,7 @@
 							const content = data.response ?? delta.content ?? '';
 							const thinking = delta.thought || '';
 							const reasoning = delta.reasoning_content || '';
-							
+
 							botMessage.content += content;
 							botMessage.thinking += thinking;
 							botMessage.reasoning += reasoning;
@@ -397,19 +395,19 @@
 			});
 
 			if (!res.ok) {
-				const err = await res.json() as any;
+				const err = (await res.json()) as { error?: string };
 				throw new Error(err.error || 'Upload failed');
 			}
 
-			const result = await res.json() as any;
+			const result = (await res.json()) as { newBalance?: number; message?: string };
 			if (result.newBalance !== undefined) {
 				balance = result.newBalance;
 			}
 			uploadStatus = `Success: ${result.message}`;
-			
+
 			// Append reference tag to prompt so LLM is context-aware
 			prompt = (prompt ? prompt + '\n' : '') + `[Analyze uploaded file: ${file.name}]`;
-			
+
 			// Append file alert bubble in messages list
 			messages = [
 				...messages,
@@ -419,9 +417,10 @@
 				}
 			];
 			scrollToBottom();
-		} catch (e: any) {
-			error = e.message || String(e);
-			uploadStatus = `Error: ${e.message || String(e)}`;
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			error = msg;
+			uploadStatus = `Error: ${msg}`;
 		} finally {
 			setTimeout(() => {
 				uploadStatus = null;
@@ -429,6 +428,15 @@
 		}
 	}
 </script>
+
+<svelte:head>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+		rel="stylesheet"
+	/>
+</svelte:head>
 
 <main>
 	<header>
@@ -452,23 +460,43 @@
 		</div>
 	{:else if userId !== null}
 		<div class="navigation-tabs">
-			<button class="nav-tab-btn" class:active={activeTab === 'chat'} onclick={() => activeTab = 'chat'}>
+			<button
+				class="nav-tab-btn"
+				class:active={activeTab === 'chat'}
+				onclick={() => (activeTab = 'chat')}
+			>
 				Chat
 			</button>
-			<button class="nav-tab-btn" class:active={activeTab === 'dashboard'} onclick={() => activeTab = 'dashboard'}>
+			<button
+				class="nav-tab-btn"
+				class:active={activeTab === 'dashboard'}
+				onclick={() => (activeTab = 'dashboard')}
+			>
 				Sandbox Console
 			</button>
-			<button class="nav-tab-btn" class:active={activeTab === 'designer'} onclick={() => activeTab = 'designer'}>
+			<button
+				class="nav-tab-btn"
+				class:active={activeTab === 'designer'}
+				onclick={() => (activeTab = 'designer')}
+			>
 				Prompt Designer
 			</button>
 		</div>
 
-		<div class="tab-content chat-tab" class:hidden={activeTab !== 'chat'} ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop}>
+		<div
+			class="tab-content chat-tab"
+			class:hidden={activeTab !== 'chat'}
+			ondragover={handleDragOver}
+			ondragleave={handleDragLeave}
+			ondrop={handleDrop}
+		>
 			{#if isDragging}
 				<div class="drag-overlay">
 					<div class="overlay-card">
 						<svg viewBox="0 0 24 24" width="48" height="48" fill="currentColor">
-							<path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+							<path
+								d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"
+							/>
 						</svg>
 						<h3>Drop to Upload File</h3>
 						<p>Costs 5 Stars. File is processed instantly into your Sandbox workspace.</p>
@@ -487,7 +515,16 @@
 				{#if messages.length === 0}
 					<div class="welcome-message">
 						<div class="welcome-mark">
-							<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+							<svg
+								viewBox="0 0 24 24"
+								width="26"
+								height="26"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
 								<path d="M12 8V4H8" />
 								<rect width="16" height="12" x="4" y="8" rx="2" />
 								<path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
@@ -533,7 +570,9 @@
 							/>
 						</svg>
 						<p>{error}</p>
-						{#if error.toLowerCase().includes('balance') || error.toLowerCase().includes('insufficient')}
+						{#if error.toLowerCase().includes('balance') || error
+								.toLowerCase()
+								.includes('insufficient')}
 							<button class="error-action" onclick={topUp}>Top Up</button>
 						{/if}
 					</div>
@@ -543,7 +582,6 @@
 
 			<div class="voice-orb-container">
 				<VoiceVisualizer
-					{userId}
 					{initData}
 					bind:messages
 					bind:balance
@@ -554,15 +592,17 @@
 			</div>
 
 			<div class="input-area">
-				<input
-					type="file"
-					onchange={handleFileSelect}
-					id="file-input"
-					style="display: none;"
-				/>
-				<button class="attach-btn" onclick={() => document.getElementById('file-input')?.click()} title="Upload file (5 Stars)" disabled={isStreaming}>
+				<input type="file" onchange={handleFileSelect} id="file-input" style="display: none;" />
+				<button
+					class="attach-btn"
+					onclick={() => document.getElementById('file-input')?.click()}
+					title="Upload file (5 Stars)"
+					disabled={isStreaming}
+				>
 					<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-						<path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-3.31 2.69-6 6-6s6 2.69 6 6v10.5c0 1.1-.9 2-2 2s-2-.9-2-2V6h-2v9.5c0 2.21 1.79 4 4 4s4-1.79 4-4V5c0-4.42-3.58-8-8-8s-8 3.58-8 8v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-2z"/>
+						<path
+							d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-3.31 2.69-6 6-6s6 2.69 6 6v10.5c0 1.1-.9 2-2 2s-2-.9-2-2V6h-2v9.5c0 2.21 1.79 4 4 4s4-1.79 4-4V5c0-4.42-3.58-8-8-8s-8 3.58-8 8v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-2z"
+						/>
 					</svg>
 				</button>
 				<textarea
@@ -571,8 +611,7 @@
 					placeholder="Type a message..."
 					onkeydown={handleKeydown}
 					disabled={isStreaming}
-					rows="1"
-				></textarea>
+					rows="1"></textarea>
 				<button class="send-btn" onclick={sendMessage} disabled={isStreaming || !prompt.trim()}>
 					{#if isStreaming}
 						<div class="spinner"></div>
@@ -620,7 +659,9 @@
 </main>
 
 <style>
-	:global(*), :global(*::before), :global(*::after) {
+	:global(*),
+	:global(*::before),
+	:global(*::after) {
 		box-sizing: border-box;
 	}
 	main {
@@ -708,7 +749,9 @@
 		justify-content: center;
 		align-items: center;
 		flex-shrink: 0;
-		transition: background-color var(--dur) var(--ease), transform var(--dur-fast) var(--ease);
+		transition:
+			background-color var(--dur) var(--ease),
+			transform var(--dur-fast) var(--ease);
 	}
 
 	.topup-btn:hover {
@@ -843,7 +886,9 @@
 		font-size: var(--text-sm);
 		font-weight: 500;
 		cursor: pointer;
-		transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+		transition:
+			border-color var(--dur) var(--ease),
+			background var(--dur) var(--ease);
 	}
 
 	.suggestion:hover {
@@ -960,8 +1005,14 @@
 	}
 
 	@keyframes bounce {
-		0%, 80%, 100% { transform: scale(0); }
-		40% { transform: scale(1); }
+		0%,
+		80%,
+		100% {
+			transform: scale(0);
+		}
+		40% {
+			transform: scale(1);
+		}
 	}
 
 	.input-area {
@@ -977,7 +1028,9 @@
 		align-items: flex-end;
 		z-index: 10;
 		box-shadow: var(--shadow-md);
-		transition: box-shadow var(--dur) var(--ease), border-color var(--dur) var(--ease);
+		transition:
+			box-shadow var(--dur) var(--ease),
+			border-color var(--dur) var(--ease);
 	}
 
 	.input-area:focus-within {
@@ -1011,7 +1064,9 @@
 		justify-content: center;
 		align-items: center;
 		cursor: pointer;
-		transition: background-color var(--dur) var(--ease), opacity var(--dur) var(--ease);
+		transition:
+			background-color var(--dur) var(--ease),
+			opacity var(--dur) var(--ease);
 		flex-shrink: 0;
 	}
 
@@ -1091,7 +1146,9 @@
 	}
 
 	@keyframes spin {
-		to { transform: rotate(360deg); }
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.loader {
@@ -1133,7 +1190,9 @@
 		font-weight: 600;
 		white-space: nowrap;
 		cursor: pointer;
-		transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+		transition:
+			color var(--dur) var(--ease),
+			background-color var(--dur) var(--ease);
 	}
 
 	.nav-tab-btn:hover {
@@ -1168,7 +1227,9 @@
 		justify-content: center;
 		padding: 0.5rem;
 		border-radius: 50%;
-		transition: background-color 0.2s, opacity 0.2s;
+		transition:
+			background-color 0.2s,
+			opacity 0.2s;
 	}
 	.attach-btn:hover {
 		background-color: rgba(0, 0, 0, 0.05);
@@ -1210,7 +1271,7 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 1rem;
-		box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
 	}
 	.overlay-card svg {
 		color: var(--primary-color);
@@ -1245,8 +1306,14 @@
 		animation: slideDown 0.3s ease;
 	}
 	@keyframes slideDown {
-		from { transform: translate(-50%, -20px); opacity: 0; }
-		to { transform: translate(-50%, 0); opacity: 1; }
+		from {
+			transform: translate(-50%, -20px);
+			opacity: 0;
+		}
+		to {
+			transform: translate(-50%, 0);
+			opacity: 1;
+		}
 	}
 	.spinner-small {
 		width: 1rem;
